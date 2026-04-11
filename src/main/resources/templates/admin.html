@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Admin Panel — IPO GMP Tracker</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"/>
+    <link rel="stylesheet" th:href="@{/css/style.css}"/>
+</head>
+<body class="bg-dark text-light">
+
+<!-- Navbar -->
+<nav class="navbar navbar-dark bg-black border-bottom border-secondary sticky-top">
+    <div class="container-fluid px-4">
+        <a class="navbar-brand fw-bold" href="/">
+            <span class="text-warning">📈</span> IPO GMP Tracker
+            <span class="badge bg-danger ms-2 fs-6">Admin</span>
+        </a>
+        <div class="d-flex gap-2">
+            <a href="/" class="btn btn-outline-light btn-sm">
+                <i class="bi bi-arrow-left"></i> Dashboard
+            </a>
+            <form th:action="@{/logout}" method="post" class="m-0">
+                <button class="btn btn-outline-danger btn-sm">
+                    <i class="bi bi-box-arrow-right"></i> Logout
+                </button>
+            </form>
+        </div>
+    </div>
+</nav>
+
+<div class="container-fluid px-4 py-4">
+
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="mb-0 fw-bold">IPO Management</h4>
+            <small class="text-secondary">Add, edit, or delete IPO entries</small>
+        </div>
+        <button class="btn btn-warning fw-semibold" data-bs-toggle="modal" data-bs-target="#ipoModal"
+                onclick="openCreateModal()">
+            <i class="bi bi-plus-circle-fill me-1"></i> Add New IPO
+        </button>
+    </div>
+
+    <!-- Alert placeholder -->
+    <div id="alertPlaceholder"></div>
+
+    <!-- IPO Table -->
+    <div class="card bg-black border-secondary shadow">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-dark table-hover align-middle mb-0">
+                    <thead class="table-header">
+                        <tr>
+                            <th class="ps-4">IPO Name</th>
+                            <th class="text-end">GMP (₹)</th>
+                            <th class="text-end">Issue Price (₹)</th>
+                            <th class="text-end d-none d-md-table-cell">Kostak (₹)</th>
+                            <th class="text-end d-none d-lg-table-cell">Est. Listing</th>
+                            <th class="text-center">Status</th>
+                            <th class="text-end d-none d-md-table-cell">Last Updated</th>
+                            <th class="text-center">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="adminTableBody">
+                        <tr th:each="ipo : ${ipos}"
+                            th:attr="data-id=${ipo.id}"
+                            class="ipo-row">
+                            <td class="ps-4 fw-semibold" th:text="${ipo.name}">—</td>
+                            <td class="text-end">
+                                <span th:class="${ipo.gmp >= 0} ? 'gmp-positive' : 'gmp-negative'"
+                                      th:text="${'₹' + #numbers.formatDecimal(ipo.gmp, 1, 2)}">—</span>
+                            </td>
+                            <td class="text-end" th:text="${'₹' + #numbers.formatDecimal(ipo.issuePrice, 1, 0)}">—</td>
+                            <td class="text-end d-none d-md-table-cell"
+                                th:text="${ipo.kostakRate != null ? '₹' + #numbers.formatDecimal(ipo.kostakRate, 1, 0) : '—'}">—</td>
+                            <td class="text-end d-none d-lg-table-cell"
+                                th:text="${ipo.expectedListingPrice != null ? '₹' + #numbers.formatDecimal(ipo.expectedListingPrice, 1, 0) : '—'}">—</td>
+                            <td class="text-center">
+                                <span th:class="'badge ' + (${ipo.status?.name() == 'OPEN'} ? 'bg-success' :
+                                               ${ipo.status?.name() == 'UPCOMING'} ? 'bg-primary' :
+                                               ${ipo.status?.name() == 'CLOSED'} ? 'bg-secondary' : 'bg-dark text-light')"
+                                      th:text="${ipo.status}">—</span>
+                            </td>
+                            <td class="text-end text-secondary small d-none d-md-table-cell"
+                                th:text="${ipo.lastUpdated != null ? #temporals.format(ipo.lastUpdated, 'dd MMM HH:mm') : '—'}">—</td>
+                            <td class="text-center">
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-info"
+                                            th:onclick="'openEditModal(' + '`' + ${ipo.id} + '`' + ')'"
+                                            title="Edit">
+                                        <i class="bi bi-pencil-fill"></i>
+                                    </button>
+                                    <button class="btn btn-outline-danger"
+                                            th:onclick="'confirmDelete(' + '`' + ${ipo.id} + '`' + ', ' + '`' + ${ipo.name} + '`' + ')'"
+                                            title="Delete">
+                                        <i class="bi bi-trash-fill"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr th:if="${#lists.isEmpty(ipos)}">
+                            <td colspan="8" class="text-center py-5 text-secondary">
+                                <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                                No IPOs yet. Click "Add New IPO" to create one.
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Add / Edit Modal ────────────────────────────────────────────────────── -->
+<div class="modal fade" id="ipoModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content bg-dark border-secondary text-light">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title fw-bold" id="modalTitle">Add New IPO</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="ipoForm" novalidate>
+                    <input type="hidden" id="ipoId"/>
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">IPO Name <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control bg-black text-light border-secondary"
+                                   id="ipoName" placeholder="e.g. Bajaj Housing Finance" required/>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Issue Price (₹) <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control bg-black text-light border-secondary"
+                                   id="issuePrice" placeholder="0" step="0.01" required/>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">GMP (₹) <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control bg-black text-light border-secondary"
+                                   id="gmp" placeholder="0" step="0.01" required/>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Est. Listing (₹)</label>
+                            <input type="text" class="form-control bg-black text-secondary border-secondary"
+                                   id="estListing" placeholder="Auto-calculated" readonly/>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Kostak Rate (₹)</label>
+                            <input type="number" class="form-control bg-black text-light border-secondary"
+                                   id="kostakRate" placeholder="0" step="0.01"/>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Subject to Sauda (₹)</label>
+                            <input type="number" class="form-control bg-black text-light border-secondary"
+                                   id="subjectToSauda" placeholder="0" step="0.01"/>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Lot Size</label>
+                            <input type="number" class="form-control bg-black text-light border-secondary"
+                                   id="lotSize" placeholder="0"/>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Issue Size (₹ Cr)</label>
+                            <input type="number" class="form-control bg-black text-light border-secondary"
+                                   id="issueSize" placeholder="0" step="0.01"/>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Registrar</label>
+                            <input type="text" class="form-control bg-black text-light border-secondary"
+                                   id="registrar" placeholder="e.g. KFin Technologies"/>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Open Date</label>
+                            <input type="datetime-local" class="form-control bg-black text-light border-secondary"
+                                   id="openDate"/>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Close Date</label>
+                            <input type="datetime-local" class="form-control bg-black text-light border-secondary"
+                                   id="closeDate"/>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Listing Date</label>
+                            <input type="datetime-local" class="form-control bg-black text-light border-secondary"
+                                   id="listingDate"/>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Status</label>
+                            <select class="form-select bg-black text-light border-secondary" id="ipoStatus">
+                                <option value="UPCOMING">Upcoming</option>
+                                <option value="OPEN">Open</option>
+                                <option value="CLOSED">Closed</option>
+                                <option value="LISTED">Listed</option>
+                            </select>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-warning fw-semibold px-4" id="saveBtn" onclick="saveIpo()">
+                    <i class="bi bi-check-circle-fill me-1"></i> Save
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Delete Confirm Modal ────────────────────────────────────────────────── -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content bg-dark border-danger text-light">
+            <div class="modal-header border-danger">
+                <h5 class="modal-title text-danger">
+                    <i class="bi bi-exclamation-triangle-fill me-1"></i> Confirm Delete
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Delete <strong id="deleteIpoName"></strong>? This action cannot be undone.</p>
+            </div>
+            <div class="modal-footer border-danger">
+                <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button class="btn btn-danger btn-sm" id="confirmDeleteBtn">
+                    <i class="bi bi-trash-fill me-1"></i> Delete
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script th:src="@{/js/admin.js}"></script>
+</body>
+</html>

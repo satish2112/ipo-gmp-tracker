@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: ipo-gmp-tracker
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: MONGO_URI
+        sync: false   # Set this manually in Render dashboard (paste Atlas URI)
+      - key: ADMIN_USERNAME
+        value: admin
+      - key: ADMIN_PASSWORD
+        sync: false   # Set securely in Render dashboard
+      - key: GMP_REFRESH_INTERVAL_MS
+        value: "45000"
+      - key: PORT
+        value: "8080"
+    healthCheckPath: /actuator/health

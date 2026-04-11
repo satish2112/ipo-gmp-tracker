@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+
+  # ── MongoDB ────────────────────────────────────────────────────────────────
+  mongodb:
+    image: mongo:7.0
+    container_name: ipo-mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: rootpassword
+      MONGO_INITDB_DATABASE: ipo_gmp_tracker
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - ipo-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Spring Boot App ────────────────────────────────────────────────────────
+  app:
+    build: .
+    container_name: ipo-app
+    restart: unless-stopped
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      MONGO_URI: mongodb://root:rootpassword@mongodb:27017/ipo_gmp_tracker?authSource=admin
+      MONGO_DB: ipo_gmp_tracker
+      ADMIN_USERNAME: admin
+      ADMIN_PASSWORD: admin123
+      GMP_REFRESH_INTERVAL_MS: 45000
+    networks:
+      - ipo-network
+
+volumes:
+  mongo_data:
+    driver: local
+
+networks:
+  ipo-network:
+    driver: bridge

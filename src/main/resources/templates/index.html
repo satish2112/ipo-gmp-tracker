@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>IPO GMP Tracker — Live Grey Market Premium</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📈</text></svg>"/>
+
+    <!-- Bootstrap 5 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"/>
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"/>
+    <!-- Custom CSS -->
+    <link rel="stylesheet" th:href="@{/css/style.css}"/>
+</head>
+<body class="bg-dark text-light">
+
+<!-- ── Navbar ─────────────────────────────────────────────────────────────── -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-black border-bottom border-secondary sticky-top">
+    <div class="container-fluid px-4">
+        <a class="navbar-brand fw-bold fs-4" href="/">
+            <span class="text-warning">📈</span> IPO GMP Tracker
+        </a>
+        <div class="d-flex align-items-center gap-3">
+            <!-- Live status pill -->
+            <span class="badge bg-success live-badge">
+                <span class="live-dot"></span> LIVE
+            </span>
+            <!-- Last updated -->
+            <span class="text-secondary small" id="lastRefreshTime">Connecting...</span>
+            <!-- Admin link -->
+            <a sec:authorize="hasRole('ADMIN')" href="/admin"
+               class="btn btn-outline-warning btn-sm">
+                <i class="bi bi-gear-fill"></i> Admin
+            </a>
+            <a sec:authorize="!isAuthenticated()" href="/login"
+               class="btn btn-outline-light btn-sm">Login</a>
+            <form sec:authorize="isAuthenticated()" th:action="@{/logout}" method="post" class="m-0">
+                <button type="submit" class="btn btn-outline-danger btn-sm">Logout</button>
+            </form>
+        </div>
+    </div>
+</nav>
+
+<!-- ── Hero Stats Bar ─────────────────────────────────────────────────────── -->
+<div class="bg-black border-bottom border-secondary py-3">
+    <div class="container-fluid px-4">
+        <div class="row g-3 text-center">
+            <div class="col-6 col-md-3">
+                <div class="stat-card">
+                    <div class="stat-value text-warning" id="totalIpos">—</div>
+                    <div class="stat-label">Total IPOs</div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="stat-card">
+                    <div class="stat-value text-success" id="activeIpos">—</div>
+                    <div class="stat-label">Active IPOs</div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="stat-card">
+                    <div class="stat-value text-info" id="avgGmp">—</div>
+                    <div class="stat-label">Avg GMP (₹)</div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="stat-card">
+                    <div class="stat-value text-primary" id="topGmpIpo">—</div>
+                    <div class="stat-label">Top GMP IPO</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Filter Bar ─────────────────────────────────────────────────────────── -->
+<div class="container-fluid px-4 py-3">
+    <div class="d-flex flex-wrap align-items-center gap-2">
+        <span class="text-secondary small me-2">Filter:</span>
+        <button class="btn btn-sm btn-warning filter-btn active" data-filter="ALL">All</button>
+        <button class="btn btn-sm btn-outline-success filter-btn" data-filter="OPEN">Open</button>
+        <button class="btn btn-sm btn-outline-primary filter-btn" data-filter="UPCOMING">Upcoming</button>
+        <button class="btn btn-sm btn-outline-secondary filter-btn" data-filter="CLOSED">Closed</button>
+        <div class="ms-auto">
+            <input type="text" id="searchInput" class="form-control form-control-sm bg-dark text-light border-secondary"
+                   placeholder="🔍  Search IPO name..." style="width:220px"/>
+        </div>
+    </div>
+</div>
+
+<!-- ── Main Table ─────────────────────────────────────────────────────────── -->
+<div class="container-fluid px-4 pb-5">
+    <div class="card bg-black border-secondary shadow-lg">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-dark table-hover align-middle mb-0" id="ipoTable">
+                    <thead class="table-header">
+                        <tr>
+                            <th class="sortable ps-4" data-col="name">
+                                IPO Name <i class="bi bi-chevron-expand text-secondary"></i>
+                            </th>
+                            <th class="sortable text-end" data-col="gmp">
+                                GMP (₹) <i class="bi bi-chevron-expand text-secondary"></i>
+                            </th>
+                            <th class="text-end d-none d-md-table-cell">GMP %</th>
+                            <th class="text-end d-none d-lg-table-cell">Kostak (₹)</th>
+                            <th class="text-end d-none d-xl-table-cell">Subject Sauda</th>
+                            <th class="text-end">Issue Price (₹)</th>
+                            <th class="text-end">Est. Listing (₹)</th>
+                            <th class="text-center d-none d-md-table-cell">Status</th>
+                            <th class="text-end d-none d-lg-table-cell">Updated</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ipoTableBody">
+                        <!-- Thymeleaf initial render (replaced by JS after WS connects) -->
+                        <tr th:each="ipo : ${ipos}" th:attr="data-id=${ipo.id}, data-status=${ipo.status}, data-gmp=${ipo.gmp}"
+                            class="ipo-row">
+                            <td class="ps-4 fw-semibold" th:text="${ipo.name}">IPO Name</td>
+                            <td class="text-end">
+                                <span th:class="${ipo.gmp >= 0} ? 'gmp-positive' : 'gmp-negative'"
+                                      th:text="${'₹' + #numbers.formatDecimal(ipo.gmp, 1, 2)}">₹0</span>
+                            </td>
+                            <td class="text-end d-none d-md-table-cell">
+                                <span th:if="${ipo.gmpPercentage != null}"
+                                      th:class="${ipo.gmpPercentage >= 0} ? 'text-success' : 'text-danger'"
+                                      th:text="${#numbers.formatDecimal(ipo.gmpPercentage, 1, 2) + '%'}">0%</span>
+                            </td>
+                            <td class="text-end d-none d-lg-table-cell"
+                                th:text="${ipo.kostakRate != null ? '₹' + #numbers.formatDecimal(ipo.kostakRate, 1, 0) : '—'}">—</td>
+                            <td class="text-end d-none d-xl-table-cell"
+                                th:text="${ipo.subjectToSauda != null ? '₹' + #numbers.formatDecimal(ipo.subjectToSauda, 1, 0) : '—'}">—</td>
+                            <td class="text-end" th:text="${'₹' + #numbers.formatDecimal(ipo.issuePrice, 1, 0)}">₹0</td>
+                            <td class="text-end fw-bold"
+                                th:text="${ipo.expectedListingPrice != null ? '₹' + #numbers.formatDecimal(ipo.expectedListingPrice, 1, 0) : '—'}">—</td>
+                            <td class="text-center d-none d-md-table-cell">
+                                <span th:class="'badge ' + (${ipo.status?.name() == 'OPEN'} ? 'bg-success' :
+                                               ${ipo.status?.name() == 'UPCOMING'} ? 'bg-primary' :
+                                               ${ipo.status?.name() == 'CLOSED'} ? 'bg-secondary' : 'bg-dark text-light')"
+                                      th:text="${ipo.status}">—</span>
+                            </td>
+                            <td class="text-end text-secondary small d-none d-lg-table-cell"
+                                th:text="${ipo.lastUpdated != null ? #temporals.format(ipo.lastUpdated, 'HH:mm:ss') : '—'}">—</td>
+                        </tr>
+                        <!-- Empty state -->
+                        <tr th:if="${#lists.isEmpty(ipos)}" id="emptyRow">
+                            <td colspan="9" class="text-center py-5 text-secondary">
+                                <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                                No IPO data available yet.
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card-footer bg-transparent border-secondary d-flex justify-content-between align-items-center px-4 py-2">
+            <small class="text-secondary">
+                <i class="bi bi-info-circle"></i>
+                GMP data auto-refreshes every 45 seconds via WebSocket
+            </small>
+            <small class="text-secondary" id="rowCount">Loading...</small>
+        </div>
+    </div>
+
+    <!-- Disclaimer -->
+    <div class="alert alert-warning bg-transparent border-warning mt-4 small">
+        <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>
+        <strong>Disclaimer:</strong> Grey Market Premium (GMP) data is for informational purposes only.
+        GMP figures are unofficial and may vary. Do not make investment decisions based solely on GMP data.
+        Always read the IPO prospectus and consult a financial advisor.
+    </div>
+</div>
+
+<!-- ── Toast Notification ─────────────────────────────────────────────────── -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index:1100">
+    <div id="updateToast" class="toast align-items-center text-bg-success border-0" role="alert">
+        <div class="d-flex">
+            <div class="toast-body" id="toastMessage">GMP Updated</div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        </div>
+    </div>
+</div>
+
+<!-- Scripts -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sockjs-client@1.6.1/dist/sockjs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@stomp/stompjs@7.0.0/bundles/stomp.umd.min.js"></script>
+<script th:src="@{/js/app.js}"></script>
+</body>
+</html>
