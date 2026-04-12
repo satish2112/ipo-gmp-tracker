@@ -5,15 +5,21 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.Field;
-import org.springframework.data.mongodb.core.index.Indexed;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
- * MongoDB document representing an IPO with GMP data.
- * Collection: ipos
+ * MongoDB document representing one IPO with its latest GMP data.
+ *
+ * Data flow:
+ *  - API/scraper fetches GMP → GmpDataService compares with stored value
+ *  - If first of day → saves as OPEN, sets dailyOpenGmp
+ *  - If changed intraday → saves as UPDATE, preserves previousGmp
+ *  - If unchanged → no write, client reads existing MongoDB value
  */
 @Data
 @Builder
@@ -25,80 +31,80 @@ public class Ipo {
     @Id
     private String id;
 
-    /** IPO company name */
     @Indexed(unique = true)
     @Field("name")
     private String name;
 
-    /** Grey Market Premium in ₹ (can be negative) */
+    /** Current (latest) GMP in ₹ */
     @Field("gmp")
     private Double gmp;
 
-    /** Kostak rate — price to buy/sell IPO application */
-    @Field("kostak_rate")
-    private Double kostakRate;
-
-    /** Subject to Sauda rate */
-    @Field("subject_to_sauda")
-    private Double subjectToSauda;
-
-    /** Official issue / subscription price */
-    @Field("issue_price")
-    private Double issuePrice;
-
-    /** IPO open date */
-    @Field("open_date")
-    private LocalDateTime openDate;
-
-    /** IPO close date */
-    @Field("close_date")
-    private LocalDateTime closeDate;
-
-    /** Expected listing date */
-    @Field("listing_date")
-    private LocalDateTime listingDate;
-
-    /** IPO status: UPCOMING, OPEN, CLOSED, LISTED */
-    @Field("status")
-    private IpoStatus status;
-
-    /** Lot size for one application */
-    @Field("lot_size")
-    private Integer lotSize;
-
-    /** Total issue size in ₹ crores */
-    @Field("issue_size")
-    private Double issueSize;
-
-    /** Registrar name */
-    @Field("registrar")
-    private String registrar;
-
-    /** Last time GMP data was refreshed */
-    @Field("last_updated")
-    private LocalDateTime lastUpdated;
-
-    /** Previous GMP value — used for change animation on frontend */
+    /** GMP from the previous save event (used for trend arrows and flash) */
     @Field("previous_gmp")
     private Double previousGmp;
 
+    /** First GMP recorded today — set once per calendar day */
+    @Field("daily_open_gmp")
+    private Double dailyOpenGmp;
+
     /**
-     * Derived: Expected listing price = issuePrice + gmp
-     * Not stored in DB; calculated on the fly.
+     * The calendar date for which dailyOpenGmp was set.
+     * Used to detect "new day" → trigger an OPEN entry.
      */
+    @Field("gmp_recorded_date")
+    private LocalDate gmpRecordedDate;
+
+    @Field("kostak_rate")
+    private Double kostakRate;
+
+    @Field("subject_to_sauda")
+    private Double subjectToSauda;
+
+    @Field("issue_price")
+    private Double issuePrice;
+
+    @Field("open_date")
+    private LocalDateTime openDate;
+
+    @Field("close_date")
+    private LocalDateTime closeDate;
+
+    @Field("listing_date")
+    private LocalDateTime listingDate;
+
+    @Field("status")
+    private IpoStatus status;
+
+    @Field("lot_size")
+    private Integer lotSize;
+
+    @Field("issue_size")
+    private Double issueSize;
+
+    @Field("registrar")
+    private String registrar;
+
+    /** Timestamp of last MongoDB write */
+    @Field("last_updated")
+    private LocalDateTime lastUpdated;
+
+    // ── Derived (not stored) ───────────────────────────────────────────────
+
     public Double getExpectedListingPrice() {
-        if (issuePrice != null && gmp != null) {
-            return issuePrice + gmp;
+        return (issuePrice != null && gmp != null) ? issuePrice + gmp : null;
+    }
+
+    public Double getGmpPercentage() {
+        if (issuePrice != null && issuePrice > 0 && gmp != null) {
+            return Math.round((gmp / issuePrice) * 10000.0) / 100.0;
         }
         return null;
     }
 
-    /**
-     * Derived: GMP % = (gmp / issuePrice) * 100
-     */
-    public Double getGmpPercentage() {
-        if (issuePrice != null && issuePrice > 0 && gmp != null) {
-            return Math.round((gmp / issuePrice) * 10000.0) / 100.0;
+    /** Intraday GMP change = current - dailyOpen */
+    public Double getDailyGmpChange() {
+        if (gmp != null && dailyOpenGmp != null) {
+            return Math.round((gmp - dailyOpenGmp) * 100.0) / 100.0;
         }
         return null;
     }

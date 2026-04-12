@@ -80,9 +80,9 @@
                             <td class="text-end d-none d-lg-table-cell"
                                 th:text="${ipo.expectedListingPrice != null ? '₹' + #numbers.formatDecimal(ipo.expectedListingPrice, 1, 0) : '—'}">—</td>
                             <td class="text-center">
-                                <span th:class="'badge ' + (${ipo.status?.name() == 'OPEN'} ? 'bg-success' :
-                                               ${ipo.status?.name() == 'UPCOMING'} ? 'bg-primary' :
-                                               ${ipo.status?.name() == 'CLOSED'} ? 'bg-secondary' : 'bg-dark text-light')"
+                                <span th:class="${ipo.status?.name() == 'OPEN' ? 'badge bg-success' :
+                                               (ipo.status?.name() == 'UPCOMING' ? 'badge bg-primary' :
+                                               (ipo.status?.name() == 'CLOSED' ? 'badge bg-secondary' : 'badge bg-dark text-light'))}"
                                       th:text="${ipo.status}">—</span>
                             </td>
                             <td class="text-end text-secondary small d-none d-md-table-cell"

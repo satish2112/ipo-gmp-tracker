@@ -1,305 +1,486 @@
 /**
- * IPO GMP Tracker — Dashboard JavaScript
- * Handles: WebSocket (STOMP), table rendering, filtering, sorting, animations
+ * IPO GMP Tracker — Dashboard JS v3
+ * Reads all data from MongoDB via REST + WebSocket.
+ * Detail panel chart loads real GMP history from /api/ipos/{id}/history
  */
-
 'use strict';
 
-// ── State ──────────────────────────────────────────────────────────────────
 let allIpos       = [];
 let currentFilter = 'ALL';
 let currentSort   = { col: 'gmp', dir: 'desc' };
+let selectedId    = null;
 let stompClient   = null;
-let toast         = null;
+let dpChart       = null;
+let activeTab     = 'overview';
+let toastTimer    = null;
 
-// ── Bootstrap Toast init ───────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-    toast = new bootstrap.Toast(document.getElementById('updateToast'), { delay: 3000 });
-    setupFilters();
-    setupSearch();
-    setupSort();
-    connectWebSocket();
-    // Fetch initial data via REST as fallback
-    fetchAllIpos();
+  setupFilters();
+  setupSearch();
+  setupSort();
+  setupDetailPanel();
+  connectWebSocket();
+  fetchAllIpos();
 });
 
-// ── WebSocket / STOMP ──────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+// WEBSOCKET
+// ══════════════════════════════════════════════════════════════
 function connectWebSocket() {
-    const statusEl = document.getElementById('lastRefreshTime');
-    statusEl.textContent = 'Connecting...';
-    statusEl.className = 'text-secondary small ws-connecting';
+  setStatus('Connecting…', false);
+  const sock = new SockJS('/ws');
+  stompClient = new StompJs.Client({
+    webSocketFactory: () => sock,
+    reconnectDelay: 5000,
+    heartbeatIncoming: 10000,
+    heartbeatOutgoing: 10000,
+  });
 
-    const sock   = new SockJS('/ws');
-    stompClient  = new StompJs.Client({
-        webSocketFactory: () => sock,
-        reconnectDelay:   5000,
-        heartbeatIncoming: 10000,
-        heartbeatOutgoing: 10000,
+  stompClient.onConnect = () => {
+    setStatus('Live ✓', true);
+    stompClient.subscribe('/topic/ipos', frame => {
+      try { handleWsMessage(JSON.parse(frame.body)); }
+      catch(e) { console.error('WS parse:', e); }
     });
+  };
 
-    stompClient.onConnect = () => {
-        console.log('✅ WebSocket connected');
-        statusEl.textContent = 'Live ✓';
-        statusEl.className = 'text-success small ws-connected';
-
-        stompClient.subscribe('/topic/ipos', (frame) => {
-            try {
-                const msg = JSON.parse(frame.body);
-                handleWebSocketMessage(msg);
-            } catch (e) {
-                console.error('WS parse error:', e);
-            }
-        });
-    };
-
-    stompClient.onDisconnect = () => {
-        console.warn('⚠️ WebSocket disconnected');
-        statusEl.textContent = 'Reconnecting...';
-        statusEl.className = 'text-warning small ws-connecting';
-    };
-
-    stompClient.onStompError = (frame) => {
-        console.error('STOMP error:', frame);
-        statusEl.textContent = 'Connection error';
-        statusEl.className = 'text-danger small ws-error';
-    };
-
-    stompClient.activate();
+  stompClient.onDisconnect = () => setStatus('Reconnecting…', false);
+  stompClient.onStompError = () => setStatus('Connection error', false);
+  stompClient.activate();
 }
 
-function handleWebSocketMessage(msg) {
-    const { event, data, id } = msg;
-
-    switch (event) {
-        case 'ALL_IPOS':
-            updateAllIpos(data);
-            updateRefreshTime();
-            break;
-        case 'IPO_UPDATED':
-        case 'GMP_UPDATED':
-            upsertIpo(data);
-            showUpdateToast(`${data.name} — GMP updated to ₹${data.gmp}`, data.gmpTrend);
-            updateRefreshTime();
-            break;
-        case 'IPO_CREATED':
-            upsertIpo(data);
-            showUpdateToast(`New IPO added: ${data.name}`, 'NEUTRAL');
-            break;
-        case 'IPO_DELETED':
-            removeIpo(id);
-            break;
-    }
+function handleWsMessage(msg) {
+  const { event, data, id } = msg;
+  switch (event) {
+    case 'ALL_IPOS':
+      allIpos = data;
+      render();
+      updateStats();
+      setStatus('Updated ' + timeStr(), true);
+      break;
+    case 'GMP_UPDATED':
+    case 'IPO_UPDATED':
+      upsertIpo(data);
+      showToast(data.name + ' — GMP ₹' + data.gmp, data.gmpTrend);
+      setStatus('Updated ' + timeStr(), true);
+      break;
+    case 'IPO_CREATED':
+      upsertIpo(data);
+      showToast('New IPO added: ' + data.name, 'NEUTRAL');
+      break;
+    case 'IPO_DELETED':
+      allIpos = allIpos.filter(i => i.id !== id);
+      if (selectedId === id) closeDetail();
+      render();
+      updateStats();
+      break;
+  }
 }
 
-// ── REST Fetch (initial load / reconnect fallback) ─────────────────────────
+// ══════════════════════════════════════════════════════════════
+// REST — initial load (data always served from MongoDB)
+// ══════════════════════════════════════════════════════════════
 async function fetchAllIpos() {
-    try {
-        const res = await fetch('/api/ipos');
-        const json = await res.json();
-        if (json.success) {
-            updateAllIpos(json.data);
-        }
-    } catch (e) {
-        console.error('REST fetch failed:', e);
+  try {
+    const r = await fetch('/api/ipos');
+    const j = await r.json();
+    if (j.success) {
+      allIpos = j.data;
+      render();
+      updateStats();
+      setStatus('Updated ' + timeStr(), true);
     }
+  } catch(e) { console.error('REST fetch:', e); }
 }
 
-// ── Data Management ────────────────────────────────────────────────────────
-function updateAllIpos(ipos) {
-    allIpos = ipos;
-    renderTable();
-    updateStats();
-}
-
+// ══════════════════════════════════════════════════════════════
+// DATA
+// ══════════════════════════════════════════════════════════════
 function upsertIpo(ipo) {
-    const idx = allIpos.findIndex(i => i.id === ipo.id);
-    if (idx >= 0) {
-        const prev = allIpos[idx];
-        allIpos[idx] = ipo;
-        renderTable();
-        // Flash the updated row
-        setTimeout(() => flashRow(ipo.id, ipo.gmpTrend), 50);
-    } else {
-        allIpos.unshift(ipo);
-        renderTable();
-    }
-    updateStats();
+  const idx = allIpos.findIndex(i => i.id === ipo.id);
+  if (idx >= 0) {
+    allIpos[idx] = ipo;
+    render();
+    setTimeout(() => flashRow(ipo.id, ipo.gmpTrend), 30);
+  } else {
+    allIpos.unshift(ipo);
+    render();
+  }
+  updateStats();
+  if (selectedId === ipo.id) renderDetailPanel(ipo);
 }
 
-function removeIpo(id) {
-    allIpos = allIpos.filter(i => i.id !== id);
-    renderTable();
-    updateStats();
-}
+// ══════════════════════════════════════════════════════════════
+// TABLE RENDER
+// ══════════════════════════════════════════════════════════════
+function render() {
+  const tbody = document.getElementById('ipoTableBody');
+  const list  = filteredSorted();
 
-// ── Table Rendering ────────────────────────────────────────────────────────
-function renderTable() {
-    const tbody = document.getElementById('ipoTableBody');
-    const filtered = getFilteredSorted();
+  if (!list.length) {
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="7">
+      <i class="bi bi-inbox" style="font-size:1.5rem;display:block;margin-bottom:8px;opacity:.3"></i>
+      No IPOs match the current filter.
+    </td></tr>`;
+    document.getElementById('rowCount').textContent = '0 results';
+    return;
+  }
 
-    if (filtered.length === 0) {
-        tbody.innerHTML = `
-            <tr><td colspan="9" class="text-center py-5 text-secondary">
-                <i class="bi bi-inbox fs-1 d-block mb-2"></i>
-                No IPOs match the current filter.
-            </td></tr>`;
-        document.getElementById('rowCount').textContent = '0 results';
-        return;
-    }
+  tbody.innerHTML = list.map(buildRow).join('');
 
-    tbody.innerHTML = filtered.map(ipo => buildRow(ipo)).join('');
-    document.getElementById('rowCount').textContent =
-        `Showing ${filtered.length} of ${allIpos.length} IPOs`;
+  document.querySelectorAll('.ipo-row').forEach(row =>
+    row.addEventListener('click', () => openDetail(row.dataset.id))
+  );
+
+  if (selectedId) {
+    const r = document.querySelector(`.ipo-row[data-id="${selectedId}"]`);
+    if (r) r.classList.add('selected');
+  }
+
+  document.getElementById('rowCount').textContent =
+    `${list.length} of ${allIpos.length} IPOs`;
 }
 
 function buildRow(ipo) {
-    const gmpClass   = ipo.gmp >= 0 ? 'gmp-positive' : 'gmp-negative';
-    const gmpPct     = ipo.gmpPercentage != null
-                       ? `<span class="${ipo.gmpPercentage >= 0 ? 'text-success' : 'text-danger'}">
-                              ${ipo.gmpPercentage.toFixed(2)}%</span>` : '—';
-    const statusBadge = getStatusBadge(ipo.status);
-    const updatedTime = ipo.lastUpdated
-        ? new Date(ipo.lastUpdated).toLocaleTimeString('en-IN', { hour12: false }) : '—';
+  const g     = ipo.gmp ?? 0;
+  const gCls  = g >= 0 ? 'green fw' : 'red fw';
+  const gSign = g >= 0 ? '+' : '';
+  const pct   = ipo.gmpPercentage != null ? fmt(ipo.gmpPercentage, 2) + '%' : '—';
+  const pCls  = (ipo.gmpPercentage ?? 0) >= 0 ? 'green' : 'red';
+  const est   = ipo.expectedListingPrice != null ? '₹' + fmtN(ipo.expectedListingPrice, 0) : '—';
 
-    return `
-    <tr class="ipo-row" data-id="${ipo.id}" data-status="${ipo.status}" data-gmp="${ipo.gmp}">
-        <td class="ps-4 fw-semibold">${escHtml(ipo.name)}</td>
-        <td class="text-end">
-            <span class="${gmpClass}">₹${fmt(ipo.gmp, 2)}</span>
-        </td>
-        <td class="text-end d-none d-md-table-cell">${gmpPct}</td>
-        <td class="text-end d-none d-lg-table-cell">${ipo.kostakRate != null ? '₹' + fmt(ipo.kostakRate, 0) : '—'}</td>
-        <td class="text-end d-none d-xl-table-cell">${ipo.subjectToSauda != null ? '₹' + fmt(ipo.subjectToSauda, 0) : '—'}</td>
-        <td class="text-end">₹${fmt(ipo.issuePrice, 0)}</td>
-        <td class="text-end fw-bold">${ipo.expectedListingPrice != null ? '₹' + fmt(ipo.expectedListingPrice, 0) : '—'}</td>
-        <td class="text-center d-none d-md-table-cell">${statusBadge}</td>
-        <td class="text-end text-secondary small d-none d-lg-table-cell">${updatedTime}</td>
-    </tr>`;
+  // Daily change badge
+  let dayChg = '';
+  if (ipo.dailyGmpChange != null && ipo.dailyGmpChange !== 0) {
+    const sign = ipo.dailyGmpChange > 0 ? '+' : '';
+    const dc   = ipo.dailyGmpChange > 0 ? 'green' : 'red';
+    dayChg = `<span class="${dc}" style="font-size:10px;margin-left:4px">${sign}₹${fmtN(Math.abs(ipo.dailyGmpChange), 2)}</span>`;
+  }
+
+  return `<tr class="ipo-row" data-id="${ipo.id}">
+    <td class="col-name-cell">
+      <div style="display:flex;align-items:center;gap:4px">
+        <span class="ipo-name">${esc(ipo.name)}</span>${dayChg}
+      </div>
+      <div class="sparkbar-row">${sparkBars(ipo)}</div>
+    </td>
+    <td class="col-num ${gCls}">${gSign}₹${fmtN(Math.abs(g), 2)}</td>
+    <td class="col-num ${pCls}">${pct}</td>
+    <td class="col-num muted hide-sm">₹${fmtN(ipo.issuePrice, 0)}</td>
+    <td class="col-num fw">${est}</td>
+    <td class="col-num muted hide-md">${ipo.kostakRate != null ? '₹' + fmtN(ipo.kostakRate, 0) : '—'}</td>
+    <td class="col-center hide-sm">${badge(ipo.status)}</td>
+  </tr>`;
 }
 
-function getStatusBadge(status) {
-    const map = {
-        OPEN:     'bg-success',
-        UPCOMING: 'bg-primary',
-        CLOSED:   'bg-secondary',
-        LISTED:   'bg-warning text-dark',
-    };
-    return `<span class="badge ${map[status] || 'bg-dark text-light'}">${status || '—'}</span>`;
+function sparkBars(ipo) {
+  if (!ipo.gmp || !ipo.issuePrice) return '';
+  const b  = ipo.issuePrice * 0.018;
+  const g  = ipo.gmp;
+  const vs = [g-b*2.5, g-b*1.5, g-b*0.5, g, g+b*0.4, g+b*0.7, g];
+  const mx = Math.max(...vs.map(Math.abs), 1);
+  return vs.map(v => {
+    const h  = Math.max(3, Math.round((Math.abs(v)/mx) * 13));
+    const c  = v >= 0 ? 'var(--green)' : 'var(--red)';
+    return `<span class="spark" style="height:${h}px;background:${c}"></span>`;
+  }).join('');
 }
 
-// ── Flash Animation ────────────────────────────────────────────────────────
-function flashRow(id, trend) {
-    const row = document.querySelector(`tr[data-id="${id}"]`);
-    if (!row) return;
-    const cls = trend === 'UP' ? 'flash-up' : trend === 'DOWN' ? 'flash-down' : 'flash-neutral';
-    row.classList.remove('flash-up', 'flash-down', 'flash-neutral');
-    void row.offsetWidth; // reflow
-    row.classList.add(cls);
-    setTimeout(() => row.classList.remove(cls), 1400);
+function badge(s) {
+  const m = { OPEN:'badge-open', UPCOMING:'badge-upcoming', CLOSED:'badge-closed', LISTED:'badge-listed' };
+  return `<span class="badge ${m[s]||'badge-closed'}">${s||'—'}</span>`;
 }
 
-// ── Stats Panel ────────────────────────────────────────────────────────────
-function updateStats() {
-    const active = allIpos.filter(i => i.status === 'OPEN' || i.status === 'UPCOMING');
-    const gmps   = allIpos.filter(i => i.gmp != null).map(i => i.gmp);
-    const avgGmp = gmps.length ? (gmps.reduce((a, b) => a + b, 0) / gmps.length) : 0;
-    const topIpo = allIpos.reduce((best, i) =>
-        (!best || (i.gmp != null && i.gmp > best.gmp)) ? i : best, null);
-
-    document.getElementById('totalIpos').textContent  = allIpos.length;
-    document.getElementById('activeIpos').textContent = active.length;
-    document.getElementById('avgGmp').textContent     = '₹' + fmt(avgGmp, 0);
-    document.getElementById('topGmpIpo').textContent  =
-        topIpo ? topIpo.name.split(' ')[0] + '…' : '—';
+// ══════════════════════════════════════════════════════════════
+// DETAIL PANEL
+// ══════════════════════════════════════════════════════════════
+function setupDetailPanel() {
+  document.getElementById('closeDetail').addEventListener('click', closeDetail);
+  document.querySelectorAll('.dp-tab').forEach(t =>
+    t.addEventListener('click', () => switchTab(t.dataset.tab))
+  );
 }
 
-// ── Filters ────────────────────────────────────────────────────────────────
-function setupFilters() {
-    document.querySelectorAll('.filter-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            document.querySelectorAll('.filter-btn').forEach(b =>
-                b.classList.remove('active', 'btn-warning', 'btn-outline-success',
-                                   'btn-outline-primary', 'btn-outline-secondary'));
-            btn.classList.add('active');
-            currentFilter = btn.dataset.filter;
-            renderTable();
-        });
+function openDetail(id) {
+  selectedId = id;
+  const ipo  = allIpos.find(i => i.id === id);
+  if (!ipo) return;
+
+  document.querySelectorAll('.ipo-row').forEach(r => r.classList.remove('selected'));
+  const row = document.querySelector(`.ipo-row[data-id="${id}"]`);
+  if (row) row.classList.add('selected');
+
+  renderDetailPanel(ipo);
+  document.getElementById('detailPanel').classList.add('open');
+  document.getElementById('tableSection').classList.add('panel-open');
+  switchTab(activeTab);
+}
+
+function renderDetailPanel(ipo) {
+  const g    = ipo.gmp ?? 0;
+  const cls  = g >= 0 ? 'green' : 'red';
+  const sign = g >= 0 ? '+' : '';
+  const pct  = ipo.gmpPercentage != null ? (g>=0?'+':'')+fmt(ipo.gmpPercentage,2)+'%' : '—';
+  const est  = ipo.expectedListingPrice != null ? '₹'+fmtN(ipo.expectedListingPrice,0) : '—';
+
+  // Daily open change
+  let dayChgHtml = '';
+  if (ipo.dailyOpenGmp != null && ipo.dailyGmpChange != null) {
+    const s2  = ipo.dailyGmpChange > 0 ? '+' : '';
+    const c2  = ipo.dailyGmpChange > 0 ? 'green' : ipo.dailyGmpChange < 0 ? 'red' : 'muted';
+    dayChgHtml = `<div class="dp-section">
+      <div class="dp-section-title">Today's Movement</div>
+      <div style="font-size:13px">
+        Open: <strong>₹${fmtN(ipo.dailyOpenGmp,2)}</strong> &nbsp;→&nbsp;
+        Now: <strong class="${c2}">${s2}₹${fmtN(Math.abs(ipo.dailyGmpChange),2)}</strong>
+      </div>
+    </div>`;
+  }
+
+  document.getElementById('dp-name').textContent = ipo.name;
+  document.getElementById('dp-badge').innerHTML  = badge(ipo.status);
+  document.getElementById('dp-gmp').innerHTML    = `<span class="${cls}">${sign}₹${fmtN(Math.abs(g),2)}</span>`;
+  document.getElementById('dp-pct').innerHTML    = `<span class="${cls}">${pct}</span>`;
+  document.getElementById('dp-listing').textContent = est;
+  document.getElementById('dp-kostak').textContent  = ipo.kostakRate != null ? '₹'+fmtN(ipo.kostakRate,0) : '—';
+  document.getElementById('dp-registrar').textContent = ipo.registrar || '—';
+
+  // Dates
+  const dates = [];
+  if (ipo.openDate)    dates.push(`Open: <strong>${fmtDate(ipo.openDate)}</strong>`);
+  if (ipo.closeDate)   dates.push(`Close: <strong>${fmtDate(ipo.closeDate)}</strong>`);
+  if (ipo.listingDate) dates.push(`Listing: <strong>${fmtDate(ipo.listingDate)}</strong>`);
+  document.getElementById('dp-dates').innerHTML = dates.length ? dates.join('<br>') : '—';
+
+  // Today's movement section
+  document.getElementById('dp-day-change').innerHTML = dayChgHtml;
+
+  // Financials tab
+  const rows = [
+    ['Issue Price',      '₹'+fmtN(ipo.issuePrice,0)],
+    ['Current GMP',      `<span class="${cls}">${sign}₹${fmtN(Math.abs(g),2)}</span>`],
+    ['Daily Open GMP',   ipo.dailyOpenGmp!=null ? '₹'+fmtN(ipo.dailyOpenGmp,2) : '—'],
+    ['Est. Listing',     est],
+    ['GMP %',            `<span class="${cls}">${pct}</span>`],
+    ['Kostak Rate',      ipo.kostakRate!=null ? '₹'+fmtN(ipo.kostakRate,0) : '—'],
+    ['Subj. to Sauda',   ipo.subjectToSauda!=null ? '₹'+fmtN(ipo.subjectToSauda,0) : '—'],
+    ['Lot Size',         ipo.lotSize!=null ? ipo.lotSize+' shares' : '—'],
+    ['Issue Size',       ipo.issueSize!=null ? '₹'+fmtN(ipo.issueSize,0)+' Cr' : '—'],
+    ['GMP Recorded',     ipo.gmpRecordedDate || '—'],
+    ['Last Updated',     ipo.lastUpdated ? new Date(ipo.lastUpdated).toLocaleTimeString('en-IN') : '—'],
+  ];
+  document.getElementById('dp-fin-table').innerHTML =
+    rows.map(([k,v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('');
+
+  if (activeTab === 'chart') loadAndBuildChart(ipo.id);
+}
+
+function closeDetail() {
+  selectedId = null;
+  document.getElementById('detailPanel').classList.remove('open');
+  document.getElementById('tableSection').classList.remove('panel-open');
+  document.querySelectorAll('.ipo-row').forEach(r => r.classList.remove('selected'));
+  if (dpChart) { dpChart.destroy(); dpChart = null; }
+}
+
+function switchTab(tab) {
+  activeTab = tab;
+  ['overview','financials','chart'].forEach(t => {
+    document.getElementById('tab-'+t).classList.toggle('hidden', t !== tab);
+  });
+  document.querySelectorAll('.dp-tab').forEach(b =>
+    b.classList.toggle('active', b.dataset.tab === tab)
+  );
+  if (tab === 'chart' && selectedId) {
+    loadAndBuildChart(selectedId);
+  }
+}
+
+// ── Real history chart from MongoDB via REST ───────────────────────────────
+async function loadAndBuildChart(ipoId) {
+  const ctx = document.getElementById('dp-chart');
+  if (!ctx) return;
+
+  if (dpChart) { dpChart.destroy(); dpChart = null; }
+
+  const label = document.getElementById('chart-loading');
+  if (label) label.textContent = 'Loading history…';
+
+  try {
+    const r = await fetch(`/api/ipos/${ipoId}/history?days=7`);
+    const j = await r.json();
+
+    if (!j.success || !j.data || j.data.length === 0) {
+      // Fallback: simulate from current GMP
+      const ipo = allIpos.find(i => i.id === ipoId);
+      if (ipo) buildSimulatedChart(ipo);
+      return;
+    }
+
+    // Build chart from real MongoDB history
+    const entries = j.data;
+    const labels  = entries.map(e => {
+      const d = new Date(e.recordedAt);
+      return d.toLocaleDateString('en-IN',{month:'short',day:'numeric'}) +
+             ' ' + d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:false});
     });
+    const vals    = entries.map(e => e.gmp);
+    const ipo     = allIpos.find(i => i.id === ipoId);
+    const g       = ipo?.gmp ?? 0;
+
+    buildChart(ctx, labels, vals, g >= 0);
+    if (label) label.textContent = `${entries.length} data points from MongoDB`;
+
+  } catch(e) {
+    console.error('History fetch failed:', e);
+    const ipo = allIpos.find(i => i.id === ipoId);
+    if (ipo) buildSimulatedChart(ipo);
+  }
+}
+
+function buildSimulatedChart(ipo) {
+  const ctx  = document.getElementById('dp-chart');
+  const g    = ipo.gmp ?? 0;
+  const b    = (ipo.issuePrice ?? 100) * 0.012;
+  const days = ['D-7','D-6','D-5','D-4','D-3','D-2','D-1','Today'];
+  const mods = [0.80, 0.86, 0.91, 0.95, 0.98, 1.02, 1.0, 1.0];
+  const vals = mods.map(m => Math.round(g*m + (Math.random()-0.5)*b));
+
+  const lbl = document.getElementById('chart-loading');
+  if (lbl) lbl.textContent = 'Simulated trend (insufficient history)';
+
+  buildChart(ctx, days, vals, g >= 0);
+}
+
+function buildChart(ctx, labels, vals, isPositive) {
+  const dark    = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const lineClr = isPositive ? (dark?'#9fe1cb':'#27500a') : (dark?'#f09595':'#a32d2d');
+  const fillClr = isPositive ? 'rgba(99,153,34,0.1)' : 'rgba(226,75,74,0.1)';
+  const gridClr = dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+  const tickClr = dark ? '#8b94a8' : '#6b7280';
+
+  dpChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        data: vals, borderColor: lineClr, backgroundColor: fillClr,
+        fill: true, tension: 0.4, pointRadius: 3,
+        pointBackgroundColor: lineClr, borderWidth: 2,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { font:{size:10}, color:tickClr, maxRotation:45 }, grid:{color:gridClr} },
+        y: { ticks: { font:{size:10}, color:tickClr, callback: v => '₹'+v }, grid:{color:gridClr} }
+      }
+    }
+  });
+}
+
+// ══════════════════════════════════════════════════════════════
+// STATS
+// ══════════════════════════════════════════════════════════════
+function updateStats() {
+  const active = allIpos.filter(i => i.status==='OPEN'||i.status==='UPCOMING');
+  const gmps   = allIpos.map(i => i.gmp ?? 0);
+  const avg    = gmps.length ? Math.round(gmps.reduce((a,b)=>a+b,0)/gmps.length) : 0;
+  const top    = [...allIpos].sort((a,b)=>(b.gmp??0)-(a.gmp??0))[0];
+
+  document.getElementById('m-total').textContent = allIpos.length;
+  document.getElementById('m-open').textContent  = active.length;
+  document.getElementById('m-avg').textContent   = (avg>=0?'₹':'-₹')+Math.abs(avg);
+  document.getElementById('m-top').textContent   = top ? top.name.split(' ')[0] : '—';
+}
+
+// ══════════════════════════════════════════════════════════════
+// FILTERS + SORT
+// ══════════════════════════════════════════════════════════════
+function setupFilters() {
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentFilter = btn.dataset.filter;
+      render();
+    });
+  });
 }
 
 function setupSearch() {
-    document.getElementById('searchInput').addEventListener('input', (e) => {
-        currentFilter = '__SEARCH__';
-        renderTable();
-    });
+  document.getElementById('searchInput').addEventListener('input', () => {
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    currentFilter = '__SEARCH__';
+    render();
+  });
 }
 
-function getFilteredSorted() {
-    const query = document.getElementById('searchInput')?.value?.toLowerCase() || '';
-    let data = [...allIpos];
-
-    // Filter
-    if (query) {
-        data = data.filter(i => i.name.toLowerCase().includes(query));
-    } else if (currentFilter !== 'ALL') {
-        data = data.filter(i => i.status === currentFilter);
-    }
-
-    // Sort
-    data.sort((a, b) => {
-        let av = a[currentSort.col], bv = b[currentSort.col];
-        if (typeof av === 'string') av = av.toLowerCase();
-        if (typeof bv === 'string') bv = bv.toLowerCase();
-        if (av == null) return 1;
-        if (bv == null) return -1;
-        return currentSort.dir === 'asc' ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
-    });
-
-    return data;
-}
-
-// ── Sorting ────────────────────────────────────────────────────────────────
 function setupSort() {
-    document.querySelectorAll('.sortable').forEach(th => {
-        th.addEventListener('click', () => {
-            const col = th.dataset.col;
-            if (currentSort.col === col) {
-                currentSort.dir = currentSort.dir === 'asc' ? 'desc' : 'asc';
-            } else {
-                currentSort = { col, dir: 'desc' };
-            }
-            renderTable();
-        });
+  document.querySelectorAll('.sortable').forEach(th => {
+    th.addEventListener('click', () => {
+      const col = th.dataset.col;
+      currentSort = currentSort.col===col
+        ? { col, dir: currentSort.dir==='asc'?'desc':'asc' }
+        : { col, dir: 'desc' };
+      render();
     });
+  });
 }
 
-// ── Toast ──────────────────────────────────────────────────────────────────
-function showUpdateToast(message, trend) {
-    const el = document.getElementById('updateToast');
-    const toastMsg = document.getElementById('toastMessage');
-    toastMsg.textContent = message;
-    el.className = 'toast align-items-center border-0 ' +
-        (trend === 'UP' ? 'text-bg-success' :
-         trend === 'DOWN' ? 'text-bg-danger' : 'text-bg-secondary');
-    toast.show();
+function filteredSorted() {
+  const q = document.getElementById('searchInput')?.value?.toLowerCase() || '';
+  let data = [...allIpos];
+  if (q) {
+    data = data.filter(i => i.name.toLowerCase().includes(q));
+  } else if (currentFilter !== 'ALL' && currentFilter !== '__SEARCH__') {
+    data = data.filter(i => i.status === currentFilter);
+  }
+  data.sort((a,b) => {
+    let av = a[currentSort.col], bv = b[currentSort.col];
+    if (typeof av === 'string') av = av.toLowerCase();
+    if (typeof bv === 'string') bv = bv.toLowerCase();
+    if (av==null) return 1; if (bv==null) return -1;
+    return currentSort.dir==='asc' ? (av>bv?1:-1) : (av<bv?1:-1);
+  });
+  return data;
 }
 
-// ── Helpers ────────────────────────────────────────────────────────────────
-function fmt(val, decimals = 2) {
-    if (val == null) return '—';
-    return Number(val).toLocaleString('en-IN', {
-        minimumFractionDigits: decimals,
-        maximumFractionDigits: decimals,
-    });
+// ══════════════════════════════════════════════════════════════
+// FLASH + TOAST
+// ══════════════════════════════════════════════════════════════
+function flashRow(id, trend) {
+  const row = document.querySelector(`.ipo-row[data-id="${id}"]`);
+  if (!row) return;
+  const cls = trend==='UP'?'flash-up':trend==='DOWN'?'flash-down':'';
+  if (!cls) return;
+  row.classList.remove('flash-up','flash-down');
+  void row.offsetWidth;
+  row.classList.add(cls);
+  setTimeout(() => row.classList.remove(cls), 1300);
 }
 
-function escHtml(str) {
-    if (!str) return '';
-    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+function showToast(msg, trend) {
+  const el = document.getElementById('toast');
+  document.getElementById('toast-msg').textContent = msg;
+  el.style.display = 'flex';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.style.display='none', 3500);
 }
 
-function updateRefreshTime() {
-    const el = document.getElementById('lastRefreshTime');
-    el.textContent = 'Updated ' + new Date().toLocaleTimeString('en-IN', { hour12: false });
-    el.className = 'text-success small ws-connected';
+// ══════════════════════════════════════════════════════════════
+// UTILS
+// ══════════════════════════════════════════════════════════════
+const fmt  = (v, d=2) => v==null ? '—' : Number(v).toFixed(d);
+const fmtN = (v, d=0) => v==null ? '—' : Number(v).toLocaleString('en-IN',{minimumFractionDigits:d,maximumFractionDigits:d});
+const fmtDate = iso => iso ? new Date(iso).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}) : '—';
+const esc = s => s ? s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') : '';
+const timeStr = () => new Date().toLocaleTimeString('en-IN',{hour12:false});
+
+function setStatus(text, ok) {
+  const el = document.getElementById('lastRefreshTime');
+  if (!el) return;
+  el.textContent = text;
+  el.style.color = ok ? 'var(--green)' : 'var(--text-muted)';
 }

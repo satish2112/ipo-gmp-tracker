@@ -38,17 +38,19 @@ public class SecurityConfig {
                 // Disable CSRF only for REST API and WebSocket paths
                 .ignoringRequestMatchers("/api/**", "/ws/**"))
             .authorizeHttpRequests(auth -> auth
-                // Public
-                .requestMatchers("/", "/login", "/css/**", "/js/**",
-                                 "/images/**", "/webjars/**").permitAll()
-                .requestMatchers("/actuator/health", "/actuator/info").permitAll()
-                .requestMatchers("/ws/**").permitAll()
+                // ── Fully public — no login needed ────────────────────────
+                .requestMatchers(
+                    "/", "/login",
+                    "/css/**", "/js/**", "/images/**", "/webjars/**",
+                    "/actuator/health", "/actuator/info",
+                    "/ws/**"
+                ).permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/ipos", "/api/ipos/**").permitAll()
-                // Admin-only
+                // ── Admin only ────────────────────────────────────────────
                 .requestMatchers("/admin/**").hasRole("ADMIN")
-                .requestMatchers(HttpMethod.POST, "/api/ipos/**").hasRole("ADMIN")
-                .requestMatchers(HttpMethod.PUT, "/api/ipos/**").hasRole("ADMIN")
-                .requestMatchers(HttpMethod.PATCH, "/api/ipos/**").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.POST,   "/api/ipos/**").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.PUT,    "/api/ipos/**").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.PATCH,  "/api/ipos/**").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.DELETE, "/api/ipos/**").hasRole("ADMIN")
                 .anyRequest().authenticated()
             )
