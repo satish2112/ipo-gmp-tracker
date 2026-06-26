@@ -1,5 +1,6 @@
 package com.ipogmp.tracker.scheduler;
 
+import com.ipogmp.tracker.service.FinnhubSyncService;
 import com.ipogmp.tracker.service.GmpDataService;
 import com.ipogmp.tracker.service.InvestorGainSyncService;
 import com.ipogmp.tracker.service.IpoService;
@@ -26,16 +27,20 @@ import org.springframework.stereotype.Component;
  *    Resets the daily API quota counter for the new day.
  *
  * 4. INVESTORGAIN SYNC (every 5 minutes)
- *    Fetches IPO data from investorgain.com and updates the database.
+ * 5. FINNHUB SYNC      (daily at 1:00 AM UTC = 6:30 AM IST)
+ *    Fetches the global IPO calendar from Finnhub and upserts into MongoDB.
+ *    Updates: issuePrice, listingDate, issueSize, status (if changed).
+ *    Never overwrites manually-entered GMP or subscription data.
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class GmpScheduler {
 
-    private final IpoService     ipoService;
-    private final GmpDataService gmpDataService;
+    private final IpoService              ipoService;
+    private final GmpDataService          gmpDataService;
     private final InvestorGainSyncService investorGainSyncService;
+    private final FinnhubSyncService      finnhubSyncService;
 
     // ─── 1. WebSocket broadcast every 45s ────────────────────────────
     @Scheduled(
@@ -84,7 +89,7 @@ public class GmpScheduler {
     }
 
     // ─── 4. InvestorGain sync every 5 minutes ────────────────────────
-    @Scheduled(fixedRateString = "${app.investorgain.sync-interval-ms:300000}") // 5 minutes default
+    @Scheduled(fixedRateString = "${app.investorgain.sync-interval-ms:300000}")
     public void syncFromInvestorGain() {
         log.info("🌐 [Scheduler] InvestorGain sync triggered");
         try {
@@ -92,6 +97,19 @@ public class GmpScheduler {
             log.info("🌐 [Scheduler] InvestorGain sync complete");
         } catch (Exception e) {
             log.error("❌ [Scheduler] InvestorGain sync failed: {}", e.getMessage(), e);
+        }
+    }
+
+    // ─── 5. Finnhub IPO Calendar sync — daily ────────────────────────
+    // 1:00 AM UTC = 6:30 AM IST  (override via FINNHUB_SYNC_CRON)
+    @Scheduled(cron = "${finnhub.api.sync-cron:0 0 1 * * *}")
+    public void syncFromFinnhub() {
+        log.info("📈 [Scheduler] Finnhub IPO Calendar sync triggered");
+        try {
+            int count = finnhubSyncService.sync();
+            log.info("📈 [Scheduler] Finnhub sync complete — {} IPOs created/updated", count);
+        } catch (Exception e) {
+            log.error("❌ [Scheduler] Finnhub sync failed: {}", e.getMessage(), e);
         }
     }
 }
