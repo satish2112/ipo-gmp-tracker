@@ -883,15 +883,44 @@ a { text-decoration: none; color: inherit; }
   }
 
   .list-panel.shifted { margin-right: 0 !important; }
-  .summary-bar { flex-wrap: wrap; }
-  .sc { min-width: calc(50% - 6px); flex: none; }
+
+  /* Summary bar — compact 2×2 grid */
+  .summary-bar { flex-wrap: wrap; padding: 10px 12px; gap: 8px; }
+  .sc          { min-width: calc(50% - 4px); flex: none; padding: 10px 12px; gap: 10px; }
+  .sc-icon     { width: 32px; height: 32px; font-size: 14px; }
+  .sc-val      { font-size: 18px; }
+
+  /* Navbar */
   .nav-tag     { display: none; }
   .nav-mid     { flex: none; }
   .refresh-txt { display: none; }
-  .controls-row { flex-direction: column; align-items: stretch; gap: 0; }
-  .search-row   { padding: 8px 0; justify-content: stretch; }
-  .search-box   { width: 100%; }
-  .search-box input { width: 100%; }
+  .navbar      { padding: 0 14px; }
+
+  /* Controls row — column layout, tighter padding */
+  .controls-row { flex-direction: column; align-items: stretch; gap: 0; padding: 0 12px; }
+
+  /* Filter tabs — full-width scrollable strip with fade hint */
+  .cat-tabs {
+    -webkit-overflow-scrolling: touch; /* iOS momentum scroll */
+    scrollbar-width: none;             /* hide scrollbar Firefox */
+    padding: 8px 0 6px;
+    gap: 6px;
+    -webkit-mask-image: linear-gradient(to right, black 80%, transparent 100%);
+    mask-image: linear-gradient(to right, black 80%, transparent 100%);
+  }
+  .cat-tabs::-webkit-scrollbar { display: none; }
+
+  /* Bigger touch targets — min 40px height */
+  .ctab {
+    padding: 9px 14px;
+    min-height: 40px;
+    font-size: 13px;
+  }
+
+  /* Search — full width */
+  .search-row  { padding: 0 0 10px; justify-content: stretch; }
+  .search-box  { flex: 1; width: 100%; }
+  .search-box input  { width: 100%; height: 40px; font-size: 14px; }
 }
 
 /* ══════════════════════════════════════════
@@ -912,7 +941,10 @@ body.dp-open .dp-backdrop {
 }
 
 @media (max-width: 400px) {
-  .sc-val { font-size: 18px; }
-  .ctab   { font-size: 12px; padding: 5px 10px; }
-  .sc-lbl { font-size: 10px; }
+  .sc-val  { font-size: 16px; }
+  .sc-lbl  { font-size: 10px; }
+  /* Keep button height — only shrink font + horizontal padding */
+  .ctab    { font-size: 12px; padding: 9px 10px; }
+  .summary-bar { padding: 8px 10px; gap: 6px; }
+  .sc      { padding: 8px 10px; }
 }
