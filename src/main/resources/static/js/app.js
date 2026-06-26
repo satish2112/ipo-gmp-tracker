@@ -156,7 +156,7 @@ function render() {
   // ── Table body ──
   const tbody = document.getElementById('ipoTableBody');
   if (!list.length) {
-    tbody.innerHTML = `<tr class="empty-row"><td colspan="7" style="text-align:center;padding:60px 20px;color:var(--tx2)">
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="9" style="text-align:center;padding:60px 20px;color:var(--tx2)">
       <i class="bi bi-inbox" style="font-size:2rem;display:block;margin-bottom:10px;opacity:.2"></i>
       No IPOs match this filter.
     </td></tr>`;
@@ -216,6 +216,19 @@ function buildRow(ipo) {
     dayChg = `<span class="${dc}" style="font-size:10px;margin-left:5px">${sign}₹${fmtN(Math.abs(ipo.dailyGmpChange), 2)}</span>`;
   }
 
+  // Subscription
+  const subVal  = ipo.subscriptionTimes;
+  const subText = subVal != null ? fmtN(subVal, 2) + 'x' : '—';
+  const subCls  = subVal != null
+    ? (subVal >= 100 ? 'sub-badge sub-hot' : subVal >= 10 ? 'sub-badge sub-warm' : 'sub-badge sub-cool')
+    : '';
+  const subHtml = subVal != null ? `<span class="${subCls}">${subText}</span>` : '—';
+
+  // Allotment date
+  const allotHtml = ipo.allotmentDate
+    ? `<span class="allot-txt">${fmtDate(ipo.allotmentDate)}</span>`
+    : '—';
+
   return `<tr class="irow" data-id="${ipo.id}">
     <td class="td-name">
       <div style="display:flex;align-items:center;gap:4px">
@@ -223,12 +236,14 @@ function buildRow(ipo) {
       </div>
       <div class="sparkbar">${sparks(ipo)}</div>
     </td>
-    <td class="th-r ${gCls} ${heat}">${arrow}${g >= 0 ? '+' : ''}₹${fmtN(Math.abs(g), 2)}</td>
-    <td class="th-r ${pCls}">${pct}</td>
-    <td class="th-r muted hide-sm">₹${fmtN(ipo.issuePrice, 0)}</td>
-    <td class="th-r fw">${est}</td>
-    <td class="th-r muted hide-md">${ipo.kostakRate != null ? '₹' + fmtN(ipo.kostakRate, 0) : '—'}</td>
-    <td class="th-c hide-sm">${bdg(ipo.status)}</td>
+    <td class="td-r ${gCls} ${heat}">${arrow}${g >= 0 ? '+' : ''}₹${fmtN(Math.abs(g), 2)}</td>
+    <td class="td-r ${pCls}">${pct}</td>
+    <td class="td-r muted hide-sm">₹${fmtN(ipo.issuePrice, 0)}</td>
+    <td class="td-r fw">${est}</td>
+    <td class="td-r hide-md">${subHtml}</td>
+    <td class="td-r hide-md">${allotHtml}</td>
+    <td class="td-r muted hide-md">${ipo.kostakRate != null ? '₹' + fmtN(ipo.kostakRate, 0) : '—'}</td>
+    <td class="td-c hide-sm">${bdg(ipo.status)}</td>
   </tr>`;
 }
 
@@ -266,8 +281,8 @@ function buildCard(ipo) {
         <div class="card-kv-v fw">${est}</div>
       </div>
       <div class="card-kv">
-        <div class="card-kv-l">Kostak</div>
-        <div class="card-kv-v">${ipo.kostakRate != null ? '₹' + fmtN(ipo.kostakRate, 0) : '—'}</div>
+        <div class="card-kv-l">Subscription</div>
+        <div class="card-kv-v">${ipo.subscriptionTimes != null ? fmtN(ipo.subscriptionTimes, 2) + 'x' : '—'}</div>
       </div>
     </div>
     <div class="card-foot">
@@ -462,9 +477,10 @@ function renderDP(ipo) {
 
   // Key dates
   const dates = [];
-  if (ipo.openDate)    dates.push(`Open: <strong>${fmtDate(ipo.openDate)}</strong>`);
-  if (ipo.closeDate)   dates.push(`Close: <strong>${fmtDate(ipo.closeDate)}</strong>`);
-  if (ipo.listingDate) dates.push(`Listing: <strong>${fmtDate(ipo.listingDate)}</strong>`);
+  if (ipo.openDate)       dates.push(`Open: <strong>${fmtDate(ipo.openDate)}</strong>`);
+  if (ipo.closeDate)      dates.push(`Close: <strong>${fmtDate(ipo.closeDate)}</strong>`);
+  if (ipo.allotmentDate)  dates.push(`Allotment: <strong>${fmtDate(ipo.allotmentDate)}</strong>`);
+  if (ipo.listingDate)    dates.push(`Listing: <strong>${fmtDate(ipo.listingDate)}</strong>`);
   document.getElementById('dp-dates').innerHTML = dates.join('<br>') || '—';
 
   // Today's movement
@@ -491,6 +507,11 @@ function renderDP(ipo) {
     ['Daily Open GMP', ipo.dailyOpenGmp != null ? '₹' + fmtN(ipo.dailyOpenGmp, 2) : '—'],
     ['Est. Listing',   est],
     ['GMP %',          `<span class="${cls}">${pct}</span>`],
+    ['Subscription',   ipo.subscriptionTimes != null ? fmtN(ipo.subscriptionTimes, 2) + 'x (Total)' : '—'],
+    ['QIB',            ipo.qibTimes != null ? fmtN(ipo.qibTimes, 2) + 'x' : '—'],
+    ['NII',            ipo.niTimes  != null ? fmtN(ipo.niTimes,  2) + 'x' : '—'],
+    ['RII',            ipo.riiTimes != null ? fmtN(ipo.riiTimes, 2) + 'x' : '—'],
+    ['Allotment',      ipo.allotmentDate ? fmtDate(ipo.allotmentDate) : '—'],
     ['Kostak Rate',    ipo.kostakRate != null ? '₹' + fmtN(ipo.kostakRate, 0) : '—'],
     ['Subj. to Sauda', ipo.subjectToSauda != null ? '₹' + fmtN(ipo.subjectToSauda, 0) : '—'],
     ['Lot Size',       ipo.lotSize != null ? ipo.lotSize + ' shares' : '—'],

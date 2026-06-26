@@ -48,6 +48,11 @@ public class IpoDTO {
     private Integer lotSize;
     private Double issueSize;
     private String registrar;
+    private LocalDateTime allotmentDate;
+    private Double subscriptionTimes;
+    private Double qibTimes;
+    private Double niTimes;
+    private Double riiTimes;
     private LocalDateTime lastUpdated;
 
     /** UP / DOWN / NEUTRAL — derived from gmp vs previousGmp */
@@ -82,6 +87,11 @@ public class IpoDTO {
             .lotSize(ipo.getLotSize())
             .issueSize(ipo.getIssueSize())
             .registrar(ipo.getRegistrar())
+            .allotmentDate(ipo.getAllotmentDate())
+            .subscriptionTimes(ipo.getSubscriptionTimes())
+            .qibTimes(ipo.getQibTimes())
+            .niTimes(ipo.getNiTimes())
+            .riiTimes(ipo.getRiiTimes())
             .lastUpdated(ipo.getLastUpdated())
             .gmpTrend(trend)
             .build();
@@ -104,6 +114,11 @@ public class IpoDTO {
             .lotSize(this.lotSize)
             .issueSize(this.issueSize)
             .registrar(this.registrar)
+            .allotmentDate(this.allotmentDate)
+            .subscriptionTimes(this.subscriptionTimes)
+            .qibTimes(this.qibTimes)
+            .niTimes(this.niTimes)
+            .riiTimes(this.riiTimes)
             .lastUpdated(LocalDateTime.now())
             .build();
     }

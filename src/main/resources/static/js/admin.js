@@ -61,9 +61,15 @@ async function openEditModal(id) {
         document.getElementById('registrar').value      = ipo.registrar || '';
         document.getElementById('ipoStatus').value      = ipo.status || 'UPCOMING';
 
-        if (ipo.openDate)    document.getElementById('openDate').value    = toDatetimeLocal(ipo.openDate);
-        if (ipo.closeDate)   document.getElementById('closeDate').value   = toDatetimeLocal(ipo.closeDate);
-        if (ipo.listingDate) document.getElementById('listingDate').value = toDatetimeLocal(ipo.listingDate);
+        if (ipo.openDate)       document.getElementById('openDate').value       = toDatetimeLocal(ipo.openDate);
+        if (ipo.closeDate)      document.getElementById('closeDate').value      = toDatetimeLocal(ipo.closeDate);
+        if (ipo.allotmentDate)  document.getElementById('allotmentDate').value  = toDatetimeLocal(ipo.allotmentDate);
+        if (ipo.listingDate)    document.getElementById('listingDate').value     = toDatetimeLocal(ipo.listingDate);
+
+        document.getElementById('subscriptionTimes').value = ipo.subscriptionTimes || '';
+        document.getElementById('qibTimes').value          = ipo.qibTimes          || '';
+        document.getElementById('niTimes').value           = ipo.niTimes           || '';
+        document.getElementById('riiTimes').value          = ipo.riiTimes          || '';
 
         updateEstListing();
         ipoModal.show();
@@ -92,11 +98,16 @@ async function saveIpo() {
         subjectToSauda: parseFloatOrNull('subjectToSauda'),
         lotSize:        parseIntOrNull('lotSize'),
         issueSize:      parseFloatOrNull('issueSize'),
-        registrar:      document.getElementById('registrar').value.trim() || null,
-        status:         document.getElementById('ipoStatus').value,
-        openDate:       datetimeLocalToISO('openDate'),
-        closeDate:      datetimeLocalToISO('closeDate'),
-        listingDate:    datetimeLocalToISO('listingDate'),
+        registrar:         document.getElementById('registrar').value.trim() || null,
+        status:            document.getElementById('ipoStatus').value,
+        openDate:          datetimeLocalToISO('openDate'),
+        closeDate:         datetimeLocalToISO('closeDate'),
+        allotmentDate:     datetimeLocalToISO('allotmentDate'),
+        listingDate:       datetimeLocalToISO('listingDate'),
+        subscriptionTimes: parseFloatOrNull('subscriptionTimes'),
+        qibTimes:          parseFloatOrNull('qibTimes'),
+        niTimes:           parseFloatOrNull('niTimes'),
+        riiTimes:          parseFloatOrNull('riiTimes'),
     };
 
     const saveBtn = document.getElementById('saveBtn');

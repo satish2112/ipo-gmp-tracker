@@ -84,6 +84,21 @@ public class Ipo {
     @Field("registrar")
     private String registrar;
 
+    @Field("allotment_date")
+    private LocalDateTime allotmentDate;
+
+    @Field("subscription_times")
+    private Double subscriptionTimes;
+
+    @Field("qib_times")
+    private Double qibTimes;
+
+    @Field("ni_times")
+    private Double niTimes;
+
+    @Field("rii_times")
+    private Double riiTimes;
+
     /** Timestamp of last MongoDB write */
     @Field("last_updated")
     private LocalDateTime lastUpdated;

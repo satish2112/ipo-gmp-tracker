@@ -1,51 +1,58 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light"
-      xmlns:th="http://www.thymeleaf.org"
-      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>IPO GMP Tracker — Live Grey Market Premium</title>
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%232563eb'/><text x='5' y='24' font-size='22'>📈</text></svg>"/>
+  <meta name="description" content="Live IPO GMP (Grey Market Premium) tracker with real-time updates, subscription data, and allotment status."/>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin=""/>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"/>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"/>
   <link rel="stylesheet" th:href="@{/css/style.css}"/>
+  <style>
+    body { display:flex; flex-direction:column; height:100vh; overflow:hidden; }
+    .page-body { flex:1; height:auto !important; min-height:300px; }
+    /* Subscription badge */
+    .sub-badge { display:inline-block; padding:1px 6px; border-radius:10px; font-size:10px; font-weight:700; }
+    .sub-hot  { background:rgba(239,68,68,.12); color:#dc2626; }
+    .sub-warm { background:rgba(245,158,11,.12); color:#d97706; }
+    .sub-cool { background:rgba(37,99,235,.1);   color:#2563eb; }
+    /* Allotment date text */
+    .allot-txt { font-size:12px; color:var(--tx2); font-variant-numeric:tabular-nums; }
+  </style>
 </head>
 <body>
 
-<!-- NAVBAR -->
+<!-- ═══════════════════════════ NAVBAR ═══════════════════════════ -->
 <nav class="navbar">
-  <a class="nav-brand" href="/">
+  <div class="nav-brand">
     <div class="nav-logo"><i class="bi bi-graph-up-arrow"></i></div>
     <div>
-      <div class="nav-name">IPO GMP</div>
-      <div class="nav-tag">Live Tracker · NSE &amp; BSE</div>
+      <div class="nav-name">IPO GMP Tracker</div>
+      <div class="nav-tag">Grey Market Premium · Live</div>
     </div>
-  </a>
+  </div>
 
   <div class="nav-mid">
-    <span class="live-badge"><span class="live-dot"></span>LIVE</span>
+    <span class="live-badge">
+      <span class="live-dot"></span>
+      LIVE
+    </span>
     <span class="refresh-txt" id="lastRefreshTime">Connecting…</span>
   </div>
 
   <div class="nav-end">
-    <button class="icon-btn" id="themeToggle" title="Toggle dark / light mode">
-      <i class="bi bi-moon" id="themeIcon"></i>
+    <button class="icon-btn" id="themeToggle" title="Toggle dark mode">
+      <i id="themeIcon" class="bi bi-moon"></i>
     </button>
-    <a sec:authorize="hasRole('ADMIN')" href="/admin" class="nbtn">
-      <i class="bi bi-sliders2"></i> Admin
+    <a href="/admin" class="nbtn">
+      <i class="bi bi-shield-lock"></i> Admin
     </a>
-    <a sec:authorize="!isAuthenticated()" href="/login" class="nbtn nbtn--accent">Login</a>
-    <form sec:authorize="isAuthenticated()" th:action="@{/logout}" method="post" style="margin:0">
-      <button type="submit" class="nbtn">Logout</button>
-    </form>
   </div>
 </nav>
 
-<!-- SUMMARY CARDS -->
-<section class="summary-bar">
+<!-- ═══════════════════════════ SUMMARY CARDS ═══════════════════════════ -->
+<div class="summary-bar">
   <div class="sc sc--purple">
     <div class="sc-icon"><i class="bi bi-collection-fill"></i></div>
     <div>
@@ -54,14 +61,14 @@
     </div>
   </div>
   <div class="sc sc--green">
-    <div class="sc-icon"><i class="bi bi-activity"></i></div>
+    <div class="sc-icon"><i class="bi bi-door-open-fill"></i></div>
     <div>
       <div class="sc-val" id="m-open">—</div>
-      <div class="sc-lbl">Open / Upcoming</div>
+      <div class="sc-lbl">Active</div>
     </div>
   </div>
   <div class="sc sc--blue">
-    <div class="sc-icon"><i class="bi bi-bar-chart-fill"></i></div>
+    <div class="sc-icon"><i class="bi bi-graph-up"></i></div>
     <div>
       <div class="sc-val" id="m-avg">—</div>
       <div class="sc-lbl">Avg GMP</div>
@@ -70,186 +77,232 @@
   <div class="sc sc--amber">
     <div class="sc-icon"><i class="bi bi-trophy-fill"></i></div>
     <div>
-      <div class="sc-val sc-val--sm" id="m-top">—</div>
-      <div class="sc-lbl" id="m-top-gmp">Top GMP IPO</div>
-    </div>
-  </div>
-</section>
-
-<!-- CATEGORY TABS + SEARCH ROW -->
-<div class="controls-row">
-  <div class="cat-tabs" id="catTabs">
-    <button class="ctab active" data-filter="ALL">All</button>
-    <button class="ctab" data-filter="OPEN">
-      <span class="tdot tdot--green"></span>Open
-    </button>
-    <button class="ctab" data-filter="UPCOMING">
-      <span class="tdot tdot--blue"></span>Upcoming
-    </button>
-    <button class="ctab" data-filter="CLOSED">Closed</button>
-    <button class="ctab" data-filter="LISTED">
-      <span class="tdot tdot--amber"></span>Listed
-    </button>
-    <span class="tab-sep"></span>
-    <button class="ctab ctab--type" data-type="EQ">Mainboard</button>
-    <button class="ctab ctab--type" data-type="SME">SME</button>
-  </div>
-
-  <div class="search-row">
-    <div class="search-box">
-      <i class="bi bi-search"></i>
-      <input id="searchInput" type="text" placeholder="Search IPO name…"
-             autocomplete="off" spellcheck="false"/>
-      <button id="searchClear" style="display:none"><i class="bi bi-x-circle-fill"></i></button>
+      <div class="sc-val sc-val--sm" id="m-top" title="">—</div>
+      <div class="sc-lbl" id="m-top-gmp">Top GMP</div>
     </div>
   </div>
 </div>
 
-<!-- MAIN BODY -->
+<!-- ═══════════════════════════ CONTROLS (tabs + search) ═══════════════════════════ -->
+<div class="controls-row">
+  <div class="cat-tabs">
+    <button class="ctab active" data-filter="ALL">All</button>
+    <button class="ctab" data-filter="OPEN">
+      <span class="tdot tdot--green"></span> Open
+    </button>
+    <button class="ctab" data-filter="UPCOMING">
+      <span class="tdot tdot--blue"></span> Upcoming
+    </button>
+    <button class="ctab" data-filter="CLOSED">Closed</button>
+    <button class="ctab" data-filter="LISTED">Listed</button>
+    <div class="tab-sep"></div>
+    <button class="ctab ctab--type" data-type="EQ">Mainboard</button>
+    <button class="ctab ctab--type" data-type="SME">SME</button>
+  </div>
+  <div class="search-row">
+    <div class="search-box">
+      <i class="bi bi-search"></i>
+      <input id="searchInput" type="text" placeholder="Search IPO…" autocomplete="off"/>
+      <button id="searchClear" style="display:none" title="Clear"><i class="bi bi-x"></i></button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════ PAGE BODY ═══════════════════════════ -->
 <div class="page-body">
 
-  <!-- IPO LIST PANEL -->
+  <!-- LIST PANEL -->
   <div class="list-panel" id="listPanel">
 
-    <!-- Desktop table -->
+    <!-- TABLE (desktop) -->
     <div class="table-shell">
-      <table class="ipo-tbl" id="ipoTable">
+      <table class="ipo-tbl">
         <thead>
           <tr>
-            <th class="th-name sortable" data-col="name">Company <i class="bi bi-chevron-expand si"></i></th>
-            <th class="th-r sortable" data-col="gmp">GMP (₹) <i class="bi bi-chevron-expand si"></i></th>
-            <th class="th-r sortable" data-col="gmpPercentage">GMP % <i class="bi bi-chevron-expand si"></i></th>
-            <th class="th-r hide-sm">Price Band</th>
-            <th class="th-r sortable" data-col="expectedListingPrice">Est. Listing <i class="bi bi-chevron-expand si"></i></th>
-            <th class="th-r hide-md">Kostak</th>
+            <th class="th-name sortable" data-col="name">
+              Company <i class="bi bi-chevron-expand si"></i>
+            </th>
+            <th class="th-r sortable" data-col="gmp">
+              GMP <i class="bi bi-chevron-expand si"></i>
+            </th>
+            <th class="th-r sortable" data-col="gmpPercentage">
+              Gain% <i class="bi bi-chevron-expand si"></i>
+            </th>
+            <th class="th-r sortable hide-sm" data-col="issuePrice">
+              Price <i class="bi bi-chevron-expand si"></i>
+            </th>
+            <th class="th-r sortable" data-col="expectedListingPrice">
+              Est. Listing <i class="bi bi-chevron-expand si"></i>
+            </th>
+            <th class="th-r sortable hide-md" data-col="subscriptionTimes">
+              Sub <i class="bi bi-chevron-expand si"></i>
+            </th>
+            <th class="th-r hide-md">Allotment</th>
+            <th class="th-r sortable hide-md" data-col="kostakRate">
+              Kostak <i class="bi bi-chevron-expand si"></i>
+            </th>
             <th class="th-c hide-sm">Status</th>
           </tr>
         </thead>
         <tbody id="ipoTableBody">
-
-          <!-- Skeleton rows -->
-          <tr class="skel-row" th:each="n : ${#numbers.sequence(1, 7)}">
-            <td class="th-name"><div class="sk sk-name"></div><div class="sk sk-sub"></div></td>
-            <td class="th-r"><div class="sk sk-n ml-a"></div></td>
-            <td class="th-r"><div class="sk sk-s ml-a"></div></td>
-            <td class="th-r hide-sm"><div class="sk sk-s ml-a"></div></td>
-            <td class="th-r"><div class="sk sk-n ml-a"></div></td>
-            <td class="th-r hide-md"><div class="sk sk-s ml-a"></div></td>
-            <td class="th-c hide-sm"><div class="sk sk-bdg mx-a"></div></td>
+          <!-- Skeleton rows (removed on data load) -->
+          <tr class="skel-row" th:each="i : ${ipos}">
+            <td class="td-name">
+              <div class="sk sk-name"></div>
+              <div class="sk sk-sub mt4"></div>
+            </td>
+            <td class="td-r"><div class="sk sk-n ml-a"></div></td>
+            <td class="td-r"><div class="sk sk-s ml-a"></div></td>
+            <td class="td-r hide-sm"><div class="sk sk-s ml-a"></div></td>
+            <td class="td-r"><div class="sk sk-n ml-a"></div></td>
+            <td class="td-r hide-md"><div class="sk sk-s ml-a"></div></td>
+            <td class="td-r hide-md"><div class="sk sk-s ml-a"></div></td>
+            <td class="td-r hide-md"><div class="sk sk-s ml-a"></div></td>
+            <td class="td-c hide-sm"><div class="sk sk-bdg mx-a"></div></td>
           </tr>
-
-          <!-- SSR fallback (hidden) -->
-          <tr th:each="ipo : ${ipos}" th:attr="data-id=${ipo.id}" class="irow" style="display:none">
-            <td class="td-name"><span class="iname" th:text="${ipo.name}">—</span></td>
-            <td th:class="${ipo.gmp >= 0} ? 'th-r g fw' : 'th-r r fw'"
-                th:text="${(ipo.gmp >= 0 ? '+₹' : '-₹') + #numbers.formatDecimal(T(java.lang.Math).abs(ipo.gmp), 1, 2)}">—</td>
-            <td th:class="${(ipo.gmpPercentage != null and ipo.gmpPercentage >= 0)} ? 'th-r g' : 'th-r r'"
-                th:text="${ipo.gmpPercentage != null ? #numbers.formatDecimal(ipo.gmpPercentage, 1, 2) + '%' : '—'}">—</td>
-            <td class="th-r muted hide-sm" th:text="${'₹' + #numbers.formatDecimal(ipo.issuePrice, 1, 0)}">—</td>
-            <td class="th-r fw" th:text="${ipo.expectedListingPrice != null ? '₹' + #numbers.formatDecimal(ipo.expectedListingPrice, 1, 0) : '—'}">—</td>
-            <td class="th-r muted hide-md" th:text="${ipo.kostakRate != null ? '₹' + #numbers.formatDecimal(ipo.kostakRate, 1, 0) : '—'}">—</td>
-            <td class="th-c hide-sm">
-              <span th:class="'badge bdg-' + ${ipo.status?.name()?.toLowerCase()}"
-                    th:text="${ipo.status}">—</span>
+          <!-- SSR fallback rows (also removed on JS load) -->
+          <tr class="ssr" th:each="ipo : ${ipos}" th:if="${ipos != null and !ipos.empty}">
+            <td class="td-name">
+              <span class="iname" th:text="${ipo.name}"></span>
+            </td>
+            <td class="td-r" th:classappend="${ipo.gmp >= 0 ? 'g fw' : 'r fw'}"
+                th:text="${(ipo.gmp >= 0 ? '+' : '') + '₹' + #numbers.formatDecimal(ipo.gmp, 1, 2)}"></td>
+            <td class="td-r" th:if="${ipo.getGmpPercentage() != null}"
+                th:classappend="${ipo.gmp >= 0 ? 'g' : 'r'}"
+                th:text="${#numbers.formatDecimal(ipo.getGmpPercentage(), 1, 2) + '%'}"></td>
+            <td class="td-r hide-sm" th:text="${'₹' + #numbers.formatDecimal(ipo.issuePrice, 1, 0)}"></td>
+            <td class="td-r fw" th:if="${ipo.getExpectedListingPrice() != null}"
+                th:text="${'₹' + #numbers.formatDecimal(ipo.getExpectedListingPrice(), 1, 0)}"></td>
+            <td class="td-r hide-md">—</td>
+            <td class="td-r hide-md allot-txt"
+                th:text="${ipo.allotmentDate != null ? #temporals.format(ipo.allotmentDate, 'dd MMM') : '—'}"></td>
+            <td class="td-r muted hide-md"
+                th:text="${ipo.kostakRate != null ? '₹' + #numbers.formatDecimal(ipo.kostakRate, 1, 0) : '—'}"></td>
+            <td class="td-c hide-sm">
+              <span class="badge"
+                    th:classappend="${ipo.status?.name() == 'OPEN' ? 'bdg-open' :
+                                    (ipo.status?.name() == 'UPCOMING' ? 'bdg-upcoming' :
+                                    (ipo.status?.name() == 'LISTED' ? 'bdg-listed' : 'bdg-closed'))}"
+                    th:text="${ipo.status}"></span>
             </td>
           </tr>
-
         </tbody>
       </table>
     </div>
 
-    <!-- Mobile card grid -->
+    <!-- CARD GRID (mobile) -->
     <div class="card-grid" id="cardGrid"></div>
 
     <!-- Footer -->
     <div class="list-foot">
-      <span id="rowCount" class="foot-txt">Loading…</span>
+      <span class="foot-txt" id="rowCount">Loading…</span>
       <div class="ws-info">
         <span class="ws-dot" id="wsDot"></span>
-        <span class="foot-txt">WebSocket live</span>
+        <span class="foot-txt">Live updates</span>
       </div>
     </div>
-  </div>
+  </div><!-- /list-panel -->
 
   <!-- DETAIL PANEL -->
-  <aside class="dp" id="detailPane">
-
-    <div class="dp-head">
-      <div>
-        <div class="dp-co" id="dp-name">—</div>
-        <div id="dp-badge" style="margin-top:5px"></div>
-      </div>
-      <button class="dp-x" id="dpClose"><i class="bi bi-x-lg"></i></button>
+  <div class="dp" id="detailPane">
+    <!-- Empty state -->
+    <div class="dp-empty" id="dp-empty">
+      <i class="bi bi-bar-chart-line"></i>
+      <p>Click any IPO to see details</p>
     </div>
 
+    <!-- Header -->
+    <div class="dp-head">
+      <div>
+        <div class="dp-co" id="dp-name"></div>
+        <div style="margin-top:4px" id="dp-badge"></div>
+      </div>
+      <button class="dp-x" id="dpClose" title="Close"><i class="bi bi-x-lg"></i></button>
+    </div>
+
+    <!-- Tabs -->
     <div class="dp-tabs">
       <button class="dptab active" data-tab="overview">Overview</button>
       <button class="dptab" data-tab="financials">Financials</button>
-      <button class="dptab" data-tab="chart">GMP Chart</button>
+      <button class="dptab" data-tab="chart">Chart</button>
     </div>
 
     <!-- Overview tab -->
     <div class="dp-body" id="tab-overview">
       <div class="dp-kpis">
-        <div class="kpi"><div class="kpi-v" id="dp-gmp">—</div><div class="kpi-l">GMP (₹)</div></div>
-        <div class="kpi"><div class="kpi-v" id="dp-pct">—</div><div class="kpi-l">GMP %</div></div>
-        <div class="kpi"><div class="kpi-v" id="dp-listing">—</div><div class="kpi-l">Est. Listing</div></div>
-        <div class="kpi"><div class="kpi-v" id="dp-kostak">—</div><div class="kpi-l">Kostak</div></div>
+        <div class="kpi">
+          <div class="kpi-v" id="dp-gmp">—</div>
+          <div class="kpi-l">GMP</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-v" id="dp-pct">—</div>
+          <div class="kpi-l">Listing Gain</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-v" id="dp-listing">—</div>
+          <div class="kpi-l">Est. Listing</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-v" id="dp-kostak">—</div>
+          <div class="kpi-l">Kostak Rate</div>
+        </div>
+      </div>
+      <div class="dp-sec">
+        <div class="dp-sec-hd">Key Dates</div>
+        <div class="dp-dates" id="dp-dates">—</div>
       </div>
       <div id="dp-movement"></div>
       <div class="dp-sec">
-        <div class="dp-sec-hd">Key Dates</div>
-        <div id="dp-dates" class="dp-dates">—</div>
-      </div>
-      <div class="dp-sec">
         <div class="dp-sec-hd">Registrar</div>
-        <div id="dp-registrar" class="dp-val">—</div>
+        <div class="dp-val" id="dp-registrar">—</div>
       </div>
       <div class="dp-disclaimer">
         <i class="bi bi-info-circle-fill"></i>
-        GMP is unofficial grey market data. Not investment advice.
+        GMP is an unofficial grey market indicator. Not investment advice.
       </div>
     </div>
 
     <!-- Financials tab -->
     <div class="dp-body hidden" id="tab-financials">
-      <table class="fin-tbl" id="dp-fin"></table>
+      <table class="fin-tbl">
+        <tbody id="dp-fin"></tbody>
+      </table>
     </div>
 
     <!-- Chart tab -->
     <div class="dp-body hidden" id="tab-chart">
       <div class="chart-info" id="chart-info">Loading…</div>
-      <div class="chart-box"><canvas id="dp-chart"></canvas></div>
-      <div class="chart-note">Data from MongoDB gmp_history</div>
+      <div class="chart-box">
+        <canvas id="dp-chart"></canvas>
+      </div>
+      <div class="chart-note">7-day GMP history</div>
     </div>
+  </div><!-- /dp -->
 
-    <!-- Empty state -->
-    <div class="dp-empty" id="dp-empty">
-      <i class="bi bi-hand-index-thumb"></i>
-      <p>Click any IPO to view details</p>
-    </div>
+</div><!-- /page-body -->
 
-  </aside>
-
-</div>
-
-<!-- SITE FOOTER -->
+<!-- ═══════════════════════════ FOOTER ═══════════════════════════ -->
 <footer class="site-foot">
-  <i class="bi bi-exclamation-triangle"></i>
-  <span><strong>Disclaimer:</strong> GMP data is for informational purposes only.
-  Always consult a SEBI-registered advisor before investing.</span>
+  <i class="bi bi-lightning-charge-fill"></i>
+  <strong>IPO GMP Tracker</strong>
+  <span>·</span>
+  <span>Data updates every 15 min from InvestorGain</span>
+  <span style="margin-left:auto;color:var(--tx3)">GMP figures are unofficial</span>
 </footer>
 
-<!-- Toast -->
+<!-- Toast notification -->
 <div class="toast" id="toast" style="display:none">
   <i id="toast-icon" class="bi bi-arrow-up-circle-fill"></i>
   <span id="toast-msg"></span>
-  <button onclick="this.parentElement.style.display='none'"><i class="bi bi-x"></i></button>
+  <button onclick="document.getElementById('toast').style.display='none'" title="Dismiss">
+    <i class="bi bi-x"></i>
+  </button>
 </div>
 
+<!-- Scripts -->
 <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1.6.1/dist/sockjs.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@stomp/stompjs@7.0.0/bundles/stomp.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script th:src="@{/js/app.js}"></script>
 </body>
 </html>

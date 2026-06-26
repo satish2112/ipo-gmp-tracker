@@ -1,6 +1,7 @@
 package com.ipogmp.tracker.scheduler;
 
 import com.ipogmp.tracker.service.GmpDataService;
+import com.ipogmp.tracker.service.InvestorGainSyncService;
 import com.ipogmp.tracker.service.IpoService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -8,7 +9,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * GmpScheduler — three scheduled jobs:
+ * GmpScheduler — four scheduled jobs:
  *
  * 1. WEBSOCKET BROADCAST  (every 45s, always running)
  *    Pushes latest data from MongoDB to all WebSocket clients.
@@ -23,6 +24,9 @@ import org.springframework.stereotype.Component;
  *
  * 3. MIDNIGHT COUNTER RESET  (daily at 00:00)
  *    Resets the daily API quota counter for the new day.
+ *
+ * 4. INVESTORGAIN SYNC (every 15 minutes)
+ *    Fetches IPO data from investorgain.com and updates the database.
  */
 @Slf4j
 @Component
@@ -31,6 +35,7 @@ public class GmpScheduler {
 
     private final IpoService     ipoService;
     private final GmpDataService gmpDataService;
+    private final InvestorGainSyncService investorGainSyncService;
 
     // ─── 1. WebSocket broadcast every 45s ────────────────────────────
     @Scheduled(
@@ -76,5 +81,17 @@ public class GmpScheduler {
     @Scheduled(cron = "0 0 0 * * *")
     public void resetDailyApiCounter() {
         gmpDataService.resetDailyCounter();
+    }
+
+    // ─── 4. InvestorGain sync every 15 minutes ────────────────────────
+    @Scheduled(fixedRateString = "900000") // 15 minutes
+    public void syncFromInvestorGain() {
+        log.info("🌐 [Scheduler] InvestorGain sync triggered");
+        try {
+            investorGainSyncService.syncFromInvestorGain();
+            log.info("🌐 [Scheduler] InvestorGain sync complete");
+        } catch (Exception e) {
+            log.error("❌ [Scheduler] InvestorGain sync failed: {}", e.getMessage(), e);
+        }
     }
 }
