@@ -850,27 +850,6 @@ a { text-decoration: none; color: inherit; }
 .toast button:hover { color:var(--tx); }
 
 /* ══════════════════════════════════════════
-   LARGE DESKTOP: permanent 2-pane side-by-side
-══════════════════════════════════════════ */
-@media (min-width: 1200px) {
-  :root { --dp-w: 420px; }
-
-  .dp {
-    position: relative !important;
-    top: auto !important;
-    height: 100% !important;
-    width: var(--dp-w) !important;
-    flex-shrink: 0;
-    transform: none !important;
-    transition: none !important;
-    box-shadow: none !important;
-  }
-
-  /* dp is in flow — no margin shift needed */
-  .list-panel.shifted { margin-right: 0 !important; }
-}
-
-/* ══════════════════════════════════════════
    MOBILE FULL LAYOUT OVERRIDES
 ══════════════════════════════════════════ */
 @media (max-width: 640px) {

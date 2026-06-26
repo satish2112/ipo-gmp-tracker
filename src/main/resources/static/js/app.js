@@ -449,15 +449,18 @@ function initDetailPanel() {
   }
   syncHandle();
 
-  // On resize: clean up any stale layout state
+  // On resize: swap between desktop shift and mobile backdrop
   window.addEventListener('resize', () => {
     syncHandle();
     const w = window.innerWidth;
-    if (w >= 1200 || w <= 640) {
+    if (w <= 640) {
+      // Crossed into mobile — drop desktop shift, show backdrop if panel is open
       document.getElementById('listPanel').classList.remove('shifted');
-    }
-    if (w > 640) {
+      if (selectedId) document.body.classList.add('dp-open');
+    } else {
+      // Crossed into desktop — drop mobile backdrop, shift list if panel is open
       document.body.classList.remove('dp-open');
+      if (selectedId) document.getElementById('listPanel').classList.add('shifted');
     }
   }, { passive: true });
 }
@@ -477,14 +480,13 @@ function openDP(id) {
   document.getElementById('detailPane').classList.add('open');
 
   const w = window.innerWidth;
-  if (w > 640 && w < 1200) {
-    // Tablet: slide panel from right, shift list panel
+  if (w > 640) {
+    // Desktop/tablet: panel slides in from right, shift list panel
     document.getElementById('listPanel').classList.add('shifted');
-  } else if (w <= 640) {
+  } else {
     // Mobile: bottom-sheet + dimmed backdrop
     document.body.classList.add('dp-open');
   }
-  // Large desktop (≥1200px): dp is always in flow, no action needed
 
   switchTab(activeTab);
 }
