@@ -25,7 +25,7 @@ import org.springframework.stereotype.Component;
  * 3. MIDNIGHT COUNTER RESET  (daily at 00:00)
  *    Resets the daily API quota counter for the new day.
  *
- * 4. INVESTORGAIN SYNC (every 15 minutes)
+ * 4. INVESTORGAIN SYNC (every 5 minutes)
  *    Fetches IPO data from investorgain.com and updates the database.
  */
 @Slf4j
@@ -83,8 +83,8 @@ public class GmpScheduler {
         gmpDataService.resetDailyCounter();
     }
 
-    // ─── 4. InvestorGain sync every 15 minutes ────────────────────────
-    @Scheduled(fixedRateString = "900000") // 15 minutes
+    // ─── 4. InvestorGain sync every 5 minutes ────────────────────────
+    @Scheduled(fixedRateString = "${app.investorgain.sync-interval-ms:300000}") // 5 minutes default
     public void syncFromInvestorGain() {
         log.info("🌐 [Scheduler] InvestorGain sync triggered");
         try {

@@ -441,6 +441,25 @@ function initDetailPanel() {
   document.querySelectorAll('.dptab').forEach(t =>
     t.addEventListener('click', () => switchTab(t.dataset.tab))
   );
+
+  // Show drag handle only on mobile
+  function syncHandle() {
+    const handle = document.querySelector('.dp-handle');
+    if (handle) handle.style.display = window.innerWidth <= 640 ? 'block' : 'none';
+  }
+  syncHandle();
+
+  // On resize: clean up any stale layout state
+  window.addEventListener('resize', () => {
+    syncHandle();
+    const w = window.innerWidth;
+    if (w >= 1200 || w <= 640) {
+      document.getElementById('listPanel').classList.remove('shifted');
+    }
+    if (w > 640) {
+      document.body.classList.remove('dp-open');
+    }
+  }, { passive: true });
 }
 
 function openDP(id) {
@@ -456,7 +475,17 @@ function openDP(id) {
   document.getElementById('dp-empty').style.display = 'none';
   renderDP(ipo);
   document.getElementById('detailPane').classList.add('open');
-  document.getElementById('listPanel').classList.add('shifted');
+
+  const w = window.innerWidth;
+  if (w > 640 && w < 1200) {
+    // Tablet: slide panel from right, shift list panel
+    document.getElementById('listPanel').classList.add('shifted');
+  } else if (w <= 640) {
+    // Mobile: bottom-sheet + dimmed backdrop
+    document.body.classList.add('dp-open');
+  }
+  // Large desktop (≥1200px): dp is always in flow, no action needed
+
   switchTab(activeTab);
 }
 
@@ -528,6 +557,7 @@ function closeDP() {
   selectedId = null;
   document.getElementById('detailPane').classList.remove('open');
   document.getElementById('listPanel').classList.remove('shifted');
+  document.body.classList.remove('dp-open');
   document.querySelectorAll('.irow, .ipo-card').forEach(r => r.classList.remove('sel'));
   document.getElementById('dp-empty').style.display = '';
   if (dpChart) { dpChart.destroy(); dpChart = null; }

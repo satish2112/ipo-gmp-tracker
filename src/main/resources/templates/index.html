@@ -160,19 +160,21 @@
             <td class="td-r hide-md"><div class="sk sk-s ml-a"></div></td>
             <td class="td-c hide-sm"><div class="sk sk-bdg mx-a"></div></td>
           </tr>
-          <!-- SSR fallback rows (also removed on JS load) -->
-          <tr class="ssr" th:each="ipo : ${ipos}" th:if="${ipos != null and !ipos.empty}">
+          <!-- SSR fallback rows (removed on JS load) -->
+          <tr class="ssr" th:each="ipo : ${ipos}">
             <td class="td-name">
               <span class="iname" th:text="${ipo.name}"></span>
             </td>
-            <td class="td-r" th:classappend="${ipo.gmp >= 0 ? 'g fw' : 'r fw'}"
-                th:text="${(ipo.gmp >= 0 ? '+' : '') + '₹' + #numbers.formatDecimal(ipo.gmp, 1, 2)}"></td>
-            <td class="td-r" th:if="${ipo.getGmpPercentage() != null}"
-                th:classappend="${ipo.gmp >= 0 ? 'g' : 'r'}"
-                th:text="${#numbers.formatDecimal(ipo.getGmpPercentage(), 1, 2) + '%'}"></td>
-            <td class="td-r hide-sm" th:text="${'₹' + #numbers.formatDecimal(ipo.issuePrice, 1, 0)}"></td>
-            <td class="td-r fw" th:if="${ipo.getExpectedListingPrice() != null}"
-                th:text="${'₹' + #numbers.formatDecimal(ipo.getExpectedListingPrice(), 1, 0)}"></td>
+            <td class="td-r"
+                th:classappend="${(ipo.gmp != null and ipo.gmp >= 0) ? 'g fw' : 'r fw'}"
+                th:text="${ipo.gmp != null ? ((ipo.gmp >= 0 ? '+' : '') + '₹' + #numbers.formatDecimal(ipo.gmp, 1, 2)) : '—'}"></td>
+            <td class="td-r"
+                th:classappend="${(ipo.gmp != null and ipo.gmp >= 0) ? 'g' : 'r'}"
+                th:text="${ipo.gmpPercentage != null ? #numbers.formatDecimal(ipo.gmpPercentage, 1, 2) + '%' : '—'}"></td>
+            <td class="td-r hide-sm"
+                th:text="${ipo.issuePrice != null ? '₹' + #numbers.formatDecimal(ipo.issuePrice, 1, 0) : '—'}"></td>
+            <td class="td-r fw"
+                th:text="${ipo.expectedListingPrice != null ? '₹' + #numbers.formatDecimal(ipo.expectedListingPrice, 1, 0) : '—'}"></td>
             <td class="td-r hide-md">—</td>
             <td class="td-r hide-md allot-txt"
                 th:text="${ipo.allotmentDate != null ? #temporals.format(ipo.allotmentDate, 'dd MMM') : '—'}"></td>
@@ -205,6 +207,8 @@
 
   <!-- DETAIL PANEL -->
   <div class="dp" id="detailPane">
+    <!-- Drag handle (mobile bottom-sheet only, hidden on desktop) -->
+    <div class="dp-handle" style="display:none"></div>
     <!-- Empty state -->
     <div class="dp-empty" id="dp-empty">
       <i class="bi bi-bar-chart-line"></i>
@@ -286,9 +290,12 @@
   <i class="bi bi-lightning-charge-fill"></i>
   <strong>IPO GMP Tracker</strong>
   <span>·</span>
-  <span>Data updates every 15 min from InvestorGain</span>
+  <span>Data updates every 5 min from InvestorGain</span>
   <span style="margin-left:auto;color:var(--tx3)">GMP figures are unofficial</span>
 </footer>
+
+<!-- Backdrop for mobile bottom-sheet -->
+<div class="dp-backdrop" id="dpBackdrop" onclick="closeDP()"></div>
 
 <!-- Toast notification -->
 <div class="toast" id="toast" style="display:none">
