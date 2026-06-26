@@ -28,7 +28,7 @@ import java.util.List;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class FinnhubService {
+public class  FinnhubService {
 
     private final RestTemplate restTemplate;
 
