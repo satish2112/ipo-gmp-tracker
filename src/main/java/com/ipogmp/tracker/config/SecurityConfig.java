@@ -18,7 +18,7 @@ import org.springframework.security.web.SecurityFilterChain;
 /**
  * Spring Security configuration.
  *
- * Public routes:  /  /login  /api/ipos (GET)  /actuator/health  /ws/**
+ * Public routes:  /  /login  /ipo/**  /api/ipos (GET)  /actuator/health  /ws/**
  * Protected:      /admin/**  POST|PUT|DELETE /api/ipos/**
  */
 @Configuration
@@ -40,7 +40,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 // ── Fully public — no login needed ────────────────────────
                 .requestMatchers(
-                    "/", "/login",
+                    "/", "/login", "/ipo/**",
                     "/css/**", "/js/**", "/images/**", "/webjars/**",
                     "/actuator/health", "/actuator/info",
                     "/ws/**"

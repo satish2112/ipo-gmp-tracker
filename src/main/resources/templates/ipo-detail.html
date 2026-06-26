@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title th:text="${ipo.name} + ' — IPO Details'">IPO Details</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"/>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"/>
+  <link rel="stylesheet" th:href="@{/css/style.css}"/>
+  <style>
+    body { background: var(--bg); min-height: 100vh; }
+
+    /* ── Page wrapper ── */
+    .detail-page { max-width: 960px; margin: 0 auto; padding: 20px 16px 60px; }
+
+    /* ── Back link ── */
+    .back-link {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 13px; font-weight: 500; color: var(--tx2);
+      padding: 6px 12px; border-radius: var(--r8);
+      border: 1px solid var(--bdr); background: var(--surf);
+      margin-bottom: 20px; transition: color .15s, border-color .15s;
+    }
+    .back-link:hover { color: var(--accent); border-color: var(--accent); }
+
+    /* ── Hero header ── */
+    .hero {
+      background: var(--surf);
+      border: 1px solid var(--bdr);
+      border-radius: var(--r12);
+      padding: 24px;
+      margin-bottom: 20px;
+      box-shadow: var(--sh);
+    }
+    .hero-top {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 12px; flex-wrap: wrap;
+    }
+    .hero-name { font-size: 22px; font-weight: 700; letter-spacing: -0.4px; color: var(--tx); }
+    .hero-sub  { font-size: 12px; color: var(--tx2); margin-top: 4px; }
+
+    .hero-kpis {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px; margin-top: 20px;
+    }
+    @media (max-width: 640px) { .hero-kpis { grid-template-columns: 1fr 1fr; } }
+
+    .kpi-card {
+      background: var(--surf2); border: 1px solid var(--bdr);
+      border-radius: var(--r8); padding: 14px 16px;
+    }
+    .kpi-card .kv { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; line-height: 1.1; }
+    .kpi-card .kl { font-size: 11px; color: var(--tx2); font-weight: 500; margin-top: 4px; }
+
+    /* ── Section card ── */
+    .section {
+      background: var(--surf); border: 1px solid var(--bdr);
+      border-radius: var(--r12); padding: 20px 24px;
+      margin-bottom: 16px; box-shadow: var(--sh);
+    }
+    .section-title {
+      font-size: 13px; font-weight: 700; letter-spacing: 0.5px;
+      text-transform: uppercase; color: var(--tx2);
+      margin-bottom: 16px; display: flex; align-items: center; gap: 8px;
+    }
+    .section-title i { color: var(--accent); font-size: 15px; }
+
+    /* ── GMP chart ── */
+    .chart-wrap { position: relative; height: 260px; }
+    @media (max-width: 480px) { .chart-wrap { height: 200px; } }
+    .chart-empty {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; height: 200px; color: var(--tx3); gap: 8px;
+    }
+    .chart-empty i { font-size: 2rem; opacity: .3; }
+
+    /* ── Subscription bars ── */
+    .sub-overview {
+      text-align: center; margin-bottom: 20px;
+    }
+    .sub-total-val {
+      font-size: 42px; font-weight: 700; letter-spacing: -1px; line-height: 1;
+    }
+    .sub-total-lbl { font-size: 12px; color: var(--tx2); font-weight: 500; margin-top: 4px; }
+
+    .sub-bars { display: flex; flex-direction: column; gap: 14px; }
+    .sub-bar-row { display: flex; align-items: center; gap: 12px; }
+    .sub-bar-lbl { font-size: 12px; font-weight: 600; color: var(--tx2); width: 34px; flex-shrink: 0; }
+    .sub-bar-track {
+      flex: 1; height: 10px; background: var(--surf2);
+      border-radius: 6px; overflow: hidden;
+      border: 1px solid var(--bdr);
+    }
+    .sub-bar-fill { height: 100%; border-radius: 6px; transition: width .8s ease; }
+    .sub-bar-fill.qib  { background: linear-gradient(90deg, #2563eb, #7c3aed); }
+    .sub-bar-fill.nii  { background: linear-gradient(90deg, #059669, #2563eb); }
+    .sub-bar-fill.rii  { background: linear-gradient(90deg, #d97706, #dc2626); }
+    .sub-bar-val { font-size: 13px; font-weight: 700; color: var(--tx); width: 58px; text-align: right; flex-shrink: 0; }
+    .sub-na { color: var(--tx3); font-size: 13px; padding: 16px 0; text-align: center; }
+
+    /* ── Info grid ── */
+    .info-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 0;
+    }
+    @media (max-width: 480px) { .info-grid { grid-template-columns: 1fr; } }
+
+    .info-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 11px 0; border-bottom: 1px solid var(--bdr);
+      gap: 8px;
+    }
+    .info-row:last-child { border-bottom: none; }
+    .info-col:first-child .info-row { padding-right: 24px; }
+    .info-col:last-child  .info-row { padding-left: 24px; border-left: 1px solid var(--bdr); }
+    @media (max-width: 480px) {
+      .info-col:last-child .info-row { padding-left: 0; border-left: none; }
+    }
+
+    .info-lbl { font-size: 13px; color: var(--tx2); }
+    .info-val { font-size: 13px; font-weight: 600; color: var(--tx); text-align: right; }
+
+    /* ── Timeline dates ── */
+    .timeline {
+      display: flex; gap: 0; position: relative;
+      overflow-x: auto; padding-bottom: 4px;
+    }
+    .timeline::before {
+      content: ''; position: absolute;
+      top: 16px; left: 32px; right: 32px; height: 2px;
+      background: var(--bdr2);
+    }
+    .tl-item {
+      flex: 1; min-width: 80px; text-align: center; position: relative;
+      padding: 0 6px;
+    }
+    .tl-dot {
+      width: 14px; height: 14px; border-radius: 50%;
+      background: var(--bdr2); border: 2px solid var(--surf);
+      margin: 9px auto 8px; position: relative; z-index: 1;
+    }
+    .tl-dot.done  { background: var(--g); }
+    .tl-dot.today { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-bg); }
+    .tl-dot.next  { background: var(--amber); }
+    .tl-lbl { font-size: 10px; color: var(--tx2); font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
+    .tl-date { font-size: 12px; color: var(--tx); font-weight: 500; margin-top: 2px; }
+
+    /* ── Disclaimer ── */
+    .disclaimer {
+      margin-top: 16px; padding: 12px 16px;
+      background: var(--amber-bg); border-radius: var(--r8);
+      border: 1px solid rgba(217,119,6,.2);
+      font-size: 12px; color: var(--amber);
+      display: flex; gap: 8px; line-height: 1.5;
+    }
+
+    /* ── Navbar (reuse from main) ── */
+    .navbar { position: sticky; top: 0; z-index: 200; }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════ NAVBAR ═══════════ -->
+<nav class="navbar">
+  <div class="nav-brand">
+    <a href="/" class="nav-logo" style="text-decoration:none"><i class="bi bi-graph-up-arrow"></i></a>
+    <div>
+      <div class="nav-name">IPO GMP Tracker</div>
+      <div class="nav-tag">Grey Market Premium · Live</div>
+    </div>
+  </div>
+  <div class="nav-end" style="margin-left:auto">
+    <button class="icon-btn" id="themeToggle" title="Toggle dark mode">
+      <i id="themeIcon" class="bi bi-moon"></i>
+    </button>
+    <a href="/admin" class="nbtn"><i class="bi bi-shield-lock"></i> Admin</a>
+  </div>
+</nav>
+
+<!-- ═══════════ DETAIL PAGE ═══════════ -->
+<div class="detail-page">
+
+  <!-- Back -->
+  <a href="/" class="back-link">
+    <i class="bi bi-arrow-left"></i> All IPOs
+  </a>
+
+  <!-- Hero -->
+  <div class="hero">
+    <div class="hero-top">
+      <div>
+        <div class="hero-name" th:text="${ipo.name}">IPO Name</div>
+        <div class="hero-sub">
+          <span th:if="${ipo.lastUpdated != null}"
+                th:text="'Last updated: ' + ${#temporals.format(ipo.lastUpdated, 'dd MMM yyyy, HH:mm')}"></span>
+          <span th:if="${ipo.registrar != null}" th:text="' · ' + ${ipo.registrar}" style="color:var(--tx3)"></span>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span class="badge"
+              th:classappend="${ipo.status?.name() == 'OPEN' ? 'bdg-open' :
+                              (ipo.status?.name() == 'UPCOMING' ? 'bdg-upcoming' :
+                              (ipo.status?.name() == 'LISTED' ? 'bdg-listed' : 'bdg-closed'))}"
+              th:text="${ipo.status}">STATUS</span>
+        <span th:if="${ipo.gmpTrend == 'UP'}"   class="badge bdg-open"><i class="bi bi-arrow-up-short"></i> Rising</span>
+        <span th:if="${ipo.gmpTrend == 'DOWN'}" class="badge bdg-closed"><i class="bi bi-arrow-down-short"></i> Falling</span>
+      </div>
+    </div>
+
+    <div class="hero-kpis">
+      <div class="kpi-card">
+        <div class="kv"
+             th:classappend="${(ipo.gmp != null and ipo.gmp >= 0) ? 'g' : 'r'}"
+             th:text="${ipo.gmp != null ? ((ipo.gmp >= 0 ? '+' : '') + '₹' + #numbers.formatDecimal(ipo.gmp, 1, 2)) : '—'}">—</div>
+        <div class="kl">Grey Market Premium</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kv"
+             th:classappend="${(ipo.gmpPercentage != null and ipo.gmpPercentage >= 0) ? 'g' : 'r'}"
+             th:text="${ipo.gmpPercentage != null ? ((ipo.gmpPercentage >= 0 ? '+' : '') + #numbers.formatDecimal(ipo.gmpPercentage, 1, 2) + '%') : '—'}">—</div>
+        <div class="kl">Expected Listing Gain</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kv"
+             th:text="${ipo.expectedListingPrice != null ? '₹' + #numbers.formatDecimal(ipo.expectedListingPrice, 1, 0) : '—'}">—</div>
+        <div class="kl">Est. Listing Price</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kv"
+             th:text="${ipo.issuePrice != null ? '₹' + #numbers.formatDecimal(ipo.issuePrice, 1, 0) : '—'}">—</div>
+        <div class="kl">Issue Price</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- GMP Chart -->
+  <div class="section">
+    <div class="section-title"><i class="bi bi-graph-up"></i> GMP History (30 Days)</div>
+    <div id="chartContainer">
+      <div class="chart-wrap"><canvas id="gmpChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Subscription Breakdown -->
+  <div class="section" th:if="${ipo.subscriptionTimes != null or ipo.qibTimes != null}">
+    <div class="section-title"><i class="bi bi-people-fill"></i> Subscription Details</div>
+
+    <div class="sub-overview" th:if="${ipo.subscriptionTimes != null}">
+      <div class="sub-total-val g"
+           th:text="${#numbers.formatDecimal(ipo.subscriptionTimes, 1, 2) + 'x'}">—</div>
+      <div class="sub-total-lbl">Total Subscription</div>
+    </div>
+
+    <div class="sub-bars" id="subBars">
+      <!-- filled by JS for accurate bar widths -->
+    </div>
+  </div>
+
+  <!-- Subscription — data not available -->
+  <div class="section" th:if="${ipo.subscriptionTimes == null and ipo.qibTimes == null}">
+    <div class="section-title"><i class="bi bi-people-fill"></i> Subscription Details</div>
+    <div class="sub-na">
+      <i class="bi bi-hourglass-split" style="font-size:1.4rem;display:block;margin-bottom:6px;opacity:.3"></i>
+      Subscription data not yet available
+    </div>
+  </div>
+
+  <!-- Key Dates Timeline -->
+  <div class="section">
+    <div class="section-title"><i class="bi bi-calendar3"></i> Key Dates</div>
+    <div class="timeline" id="timeline">
+      <div class="tl-item" th:if="${ipo.openDate != null}">
+        <div class="tl-dot" id="dot-open"></div>
+        <div class="tl-lbl">Opens</div>
+        <div class="tl-date" th:text="${#temporals.format(ipo.openDate, 'dd MMM')}">—</div>
+      </div>
+      <div class="tl-item" th:if="${ipo.closeDate != null}">
+        <div class="tl-dot" id="dot-close"></div>
+        <div class="tl-lbl">Closes</div>
+        <div class="tl-date" th:text="${#temporals.format(ipo.closeDate, 'dd MMM')}">—</div>
+      </div>
+      <div class="tl-item" th:if="${ipo.allotmentDate != null}">
+        <div class="tl-dot" id="dot-allot"></div>
+        <div class="tl-lbl">Allotment</div>
+        <div class="tl-date" th:text="${#temporals.format(ipo.allotmentDate, 'dd MMM')}">—</div>
+      </div>
+      <div class="tl-item" th:if="${ipo.listingDate != null}">
+        <div class="tl-dot" id="dot-list"></div>
+        <div class="tl-lbl">Listing</div>
+        <div class="tl-date" th:text="${#temporals.format(ipo.listingDate, 'dd MMM')}">—</div>
+      </div>
+    </div>
+    <p th:if="${ipo.openDate == null and ipo.closeDate == null and ipo.listingDate == null}"
+       style="color:var(--tx3);font-size:13px;text-align:center;padding:20px 0">Dates not available</p>
+  </div>
+
+  <!-- IPO Info Grid -->
+  <div class="section">
+    <div class="section-title"><i class="bi bi-info-circle"></i> IPO Details</div>
+    <div class="info-grid">
+      <div class="info-col">
+        <div class="info-row">
+          <span class="info-lbl">Issue Price</span>
+          <span class="info-val"
+                th:text="${ipo.issuePrice != null ? '₹' + #numbers.formatDecimal(ipo.issuePrice, 1, 0) : '—'}">—</span>
+        </div>
+        <div class="info-row">
+          <span class="info-lbl">Est. Listing Price</span>
+          <span class="info-val"
+                th:text="${ipo.expectedListingPrice != null ? '₹' + #numbers.formatDecimal(ipo.expectedListingPrice, 1, 0) : '—'}">—</span>
+        </div>
+        <div class="info-row">
+          <span class="info-lbl">GMP</span>
+          <span class="info-val"
+                th:classappend="${(ipo.gmp != null and ipo.gmp >= 0) ? 'g' : 'r'}"
+                th:text="${ipo.gmp != null ? ((ipo.gmp >= 0 ? '+' : '') + '₹' + #numbers.formatDecimal(ipo.gmp, 1, 2)) : '—'}">—</span>
+        </div>
+        <div class="info-row">
+          <span class="info-lbl">Kostak Rate</span>
+          <span class="info-val"
+                th:text="${ipo.kostakRate != null ? '₹' + #numbers.formatDecimal(ipo.kostakRate, 1, 0) : '—'}">—</span>
+        </div>
+        <div class="info-row">
+          <span class="info-lbl">Subject to Sauda</span>
+          <span class="info-val"
+                th:text="${ipo.subjectToSauda != null ? '₹' + #numbers.formatDecimal(ipo.subjectToSauda, 1, 0) : '—'}">—</span>
+        </div>
+      </div>
+      <div class="info-col">
+        <div class="info-row">
+          <span class="info-lbl">Lot Size</span>
+          <span class="info-val"
+                th:text="${ipo.lotSize != null ? ipo.lotSize + ' shares' : '—'}">—</span>
+        </div>
+        <div class="info-row">
+          <span class="info-lbl">Issue Size</span>
+          <span class="info-val"
+                th:text="${ipo.issueSize != null ? '₹' + #numbers.formatDecimal(ipo.issueSize, 1, 0) + ' Cr' : '—'}">—</span>
+        </div>
+        <div class="info-row">
+          <span class="info-lbl">Registrar</span>
+          <span class="info-val" th:text="${ipo.registrar ?: '—'}">—</span>
+        </div>
+        <div class="info-row">
+          <span class="info-lbl">Type</span>
+          <span class="info-val">Equity</span>
+        </div>
+        <div class="info-row">
+          <span class="info-lbl">Status</span>
+          <span class="info-val">
+            <span class="badge"
+                  th:classappend="${ipo.status?.name() == 'OPEN' ? 'bdg-open' :
+                                  (ipo.status?.name() == 'UPCOMING' ? 'bdg-upcoming' :
+                                  (ipo.status?.name() == 'LISTED' ? 'bdg-listed' : 'bdg-closed'))}"
+                  th:text="${ipo.status}">—</span>
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Disclaimer -->
+  <div class="disclaimer">
+    <i class="bi bi-info-circle-fill" style="flex-shrink:0;margin-top:1px"></i>
+    <span>GMP (Grey Market Premium) is an unofficial indicator based on grey market trading activity.
+    These figures are not sourced from SEBI, NSE, or BSE and should <strong>not</strong> be treated as
+    investment advice. Always verify with official sources before investing.</span>
+  </div>
+
+</div><!-- /detail-page -->
+
+<!-- Scripts -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script th:inline="javascript">
+'use strict';
+
+const IPO_ID   = /*[[${ipo.id}]]*/   'unknown';
+const QIB_VAL  = /*[[${ipo.qibTimes}]]*/ null;
+const NII_VAL  = /*[[${ipo.niTimes}]]*/  null;
+const RII_VAL  = /*[[${ipo.riiTimes}]]*/ null;
+
+// ── Theme ──────────────────────────────────────────────────────────────────
+function applyTheme(t) {
+  document.documentElement.setAttribute('data-theme', t);
+  localStorage.setItem('ipo-theme', t);
+  document.getElementById('themeIcon').className = t === 'dark' ? 'bi bi-sun' : 'bi bi-moon';
+}
+const savedTheme = localStorage.getItem('ipo-theme') || 'light';
+applyTheme(savedTheme);
+document.getElementById('themeToggle').addEventListener('click', () => {
+  const cur = document.documentElement.getAttribute('data-theme');
+  applyTheme(cur === 'dark' ? 'light' : 'dark');
+});
+
+const isDark = () => document.documentElement.getAttribute('data-theme') === 'dark';
+
+// ── Subscription bars ──────────────────────────────────────────────────────
+function renderSubBars() {
+  const container = document.getElementById('subBars');
+  if (!container) return;
+
+  const rows = [
+    { lbl: 'QIB', val: QIB_VAL, cls: 'qib' },
+    { lbl: 'NII', val: NII_VAL, cls: 'nii' },
+    { lbl: 'RII', val: RII_VAL, cls: 'rii' },
+  ].filter(r => r.val != null);
+
+  if (!rows.length) { container.style.display = 'none'; return; }
+
+  const max = Math.max(...rows.map(r => r.val));
+  container.innerHTML = rows.map(r => {
+    const pct = max > 0 ? (r.val / max * 100).toFixed(1) : 0;
+    return `<div class="sub-bar-row">
+      <span class="sub-bar-lbl">${r.lbl}</span>
+      <div class="sub-bar-track">
+        <div class="sub-bar-fill ${r.cls}" style="width:${pct}%"></div>
+      </div>
+      <span class="sub-bar-val">${r.val.toFixed(2)}x</span>
+    </div>`;
+  }).join('');
+}
+
+// ── GMP Chart ──────────────────────────────────────────────────────────────
+async function loadChart() {
+  const container = document.getElementById('chartContainer');
+  try {
+    const res  = await fetch(`/api/ipos/${IPO_ID}/history?days=30`);
+    const json = await res.json();
+    const hist = json.data || [];
+
+    if (!hist.length) {
+      container.innerHTML = `<div class="chart-empty">
+        <i class="bi bi-bar-chart-line"></i>
+        <span style="font-size:13px;color:var(--tx2)">No historical data yet</span>
+      </div>`;
+      return;
+    }
+
+    // Group by trade_date — pick latest GMP per day
+    const dayMap = {};
+    hist.forEach(h => {
+      const d = h.tradeDate;
+      if (!dayMap[d] || h.recordedAt > dayMap[d].recordedAt) dayMap[d] = h;
+    });
+    const sorted = Object.values(dayMap).sort((a, b) => a.tradeDate < b.tradeDate ? -1 : 1);
+
+    const labels = sorted.map(h => {
+      const [,m,d] = h.tradeDate.split('-');
+      const months = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      return `${parseInt(d)} ${months[parseInt(m)]}`;
+    });
+    const data = sorted.map(h => h.gmp);
+
+    const dark   = isDark();
+    const accent = dark ? '#4f8ef7' : '#2563eb';
+    const tx2    = dark ? '#8b949e' : '#475569';
+    const bdr    = dark ? '#30363d' : '#e4e8ef';
+    const surf   = dark ? '#161b22' : '#ffffff';
+
+    const ctx = document.getElementById('gmpChart').getContext('2d');
+    const gradient = ctx.createLinearGradient(0, 0, 0, 260);
+    gradient.addColorStop(0, accent + '33');
+    gradient.addColorStop(1, accent + '00');
+
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: 'GMP (₹)',
+          data,
+          borderColor: accent,
+          backgroundColor: gradient,
+          borderWidth: 2,
+          pointRadius: sorted.length > 15 ? 0 : 4,
+          pointHoverRadius: 6,
+          pointBackgroundColor: accent,
+          tension: 0.35,
+          fill: true,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: surf,
+            borderColor: bdr,
+            borderWidth: 1,
+            titleColor: tx2,
+            bodyColor: accent,
+            bodyFont: { weight: 'bold', size: 14 },
+            callbacks: {
+              label: ctx => '  ₹' + ctx.raw.toFixed(2),
+            }
+          }
+        },
+        scales: {
+          x: {
+            grid: { color: bdr, drawBorder: false },
+            ticks: { color: tx2, font: { size: 11 }, maxRotation: 0, maxTicksLimit: 10 }
+          },
+          y: {
+            grid: { color: bdr, drawBorder: false },
+            ticks: {
+              color: tx2, font: { size: 11 },
+              callback: v => '₹' + v
+            }
+          }
+        }
+      }
+    });
+  } catch (e) {
+    container.innerHTML = `<div class="chart-empty">
+      <i class="bi bi-exclamation-circle"></i>
+      <span style="font-size:13px;color:var(--tx2)">Could not load chart data</span>
+    </div>`;
+  }
+}
+
+// ── Timeline dots ──────────────────────────────────────────────────────────
+function colorTimelineDots() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  function dotFor(id, isoDate) {
+    const el = document.getElementById(id);
+    if (!el || !isoDate) return;
+    const d = new Date(isoDate); d.setHours(0, 0, 0, 0);
+    if (d < today)      el.classList.add('done');
+    else if (d.getTime() === today.getTime()) el.classList.add('today');
+    else                el.classList.add('next');
+  }
+
+  // Read dates from Thymeleaf-rendered text — can't use th:inline for all
+  const tl = document.querySelectorAll('.tl-item');
+  tl.forEach(item => {
+    const lbl  = item.querySelector('.tl-lbl')?.textContent?.trim().toLowerCase();
+    const date = item.querySelector('.tl-date')?.textContent?.trim();
+    const dot  = item.querySelector('.tl-dot');
+    if (!dot || !date || date === '—') return;
+    // Parse "15 Jun" — add current year and check
+    const parsed = new Date(date + ' ' + new Date().getFullYear());
+    if (isNaN(parsed)) return;
+    parsed.setHours(0, 0, 0, 0);
+    if (parsed < today)      dot.classList.add('done');
+    else if (parsed.getTime() === today.getTime()) dot.classList.add('today');
+    else                     dot.classList.add('next');
+  });
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+renderSubBars();
+loadChart();
+colorTimelineDots();
+</script>
+</body>
+</html>

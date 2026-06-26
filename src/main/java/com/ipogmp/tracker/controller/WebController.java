@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 
 /**
  * MVC controller — renders Thymeleaf HTML templates.
@@ -28,6 +29,13 @@ public class WebController {
     public String admin(Model model) {
         model.addAttribute("ipos", ipoService.getAllIpos());
         return "admin";
+    }
+
+    /** Full IPO detail page */
+    @GetMapping("/ipo/{id}")
+    public String ipoDetail(@PathVariable String id, Model model) {
+        model.addAttribute("ipo", ipoService.getIpoById(id));
+        return "ipo-detail";
     }
 
     /** Login page */

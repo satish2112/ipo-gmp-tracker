@@ -163,7 +163,7 @@ function render() {
   } else {
     tbody.innerHTML = list.map(buildRow).join('');
     tbody.querySelectorAll('.irow').forEach(r =>
-      r.addEventListener('click', () => openDP(r.dataset.id))
+      r.addEventListener('click', () => window.location.href = '/ipo/' + r.dataset.id)
     );
     if (selectedId) {
       const sel = tbody.querySelector(`.irow[data-id="${selectedId}"]`);
@@ -178,7 +178,7 @@ function render() {
     : `<div style="text-align:center;padding:40px;color:var(--tx2)">No IPOs found.</div>`;
 
   grid.querySelectorAll('.ipo-card').forEach(c =>
-    c.addEventListener('click', () => openDP(c.dataset.id))
+    c.addEventListener('click', () => window.location.href = '/ipo/' + c.dataset.id)
   );
   if (selectedId) {
     const sc = grid.querySelector(`.ipo-card[data-id="${selectedId}"]`);
