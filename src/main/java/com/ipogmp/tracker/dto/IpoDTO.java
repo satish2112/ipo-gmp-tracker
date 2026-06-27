@@ -55,6 +55,9 @@ public class IpoDTO {
     private Double riiTimes;
     private LocalDateTime lastUpdated;
 
+    /** EQ (Mainboard) or SME */
+    private String type;
+
     /** UP / DOWN / NEUTRAL — derived from gmp vs previousGmp */
     private String gmpTrend;
 
@@ -93,6 +96,7 @@ public class IpoDTO {
             .niTimes(ipo.getNiTimes())
             .riiTimes(ipo.getRiiTimes())
             .lastUpdated(ipo.getLastUpdated())
+            .type(ipo.getType())
             .gmpTrend(trend)
             .build();
     }
@@ -120,6 +124,7 @@ public class IpoDTO {
             .niTimes(this.niTimes)
             .riiTimes(this.riiTimes)
             .lastUpdated(LocalDateTime.now())
+            .type(this.type)
             .build();
     }
 }

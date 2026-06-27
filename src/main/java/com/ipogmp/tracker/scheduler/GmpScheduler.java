@@ -6,6 +6,8 @@ import com.ipogmp.tracker.service.InvestorGainSyncService;
 import com.ipogmp.tracker.service.IpoService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -94,15 +96,17 @@ public class GmpScheduler {
         log.info("🌐 [Scheduler] InvestorGain sync triggered");
         try {
             investorGainSyncService.syncFromInvestorGain();
-            log.info("🌐 [Scheduler] InvestorGain sync complete");
+            // Broadcast immediately so clients see fresh GMP + trend arrows without waiting 45s
+            ipoService.broadcastAllIpos();
+            log.info("🌐 [Scheduler] InvestorGain sync complete, broadcast sent");
         } catch (Exception e) {
             log.error("❌ [Scheduler] InvestorGain sync failed: {}", e.getMessage(), e);
         }
     }
 
-    // ─── 5. Finnhub IPO Calendar sync — daily ────────────────────────
-    // 1:00 AM UTC = 6:30 AM IST  (override via FINNHUB_SYNC_CRON)
-    @Scheduled(cron = "${finnhub.api.sync-cron:0 0 1 * * *}")
+    // ─── 5. Finnhub IPO Calendar sync — every 6 hours ───────────────
+    // 00:00, 06:00, 12:00, 18:00 UTC  (override via FINNHUB_SYNC_CRON)
+    @Scheduled(cron = "${finnhub.api.sync-cron:0 0 */6 * * *}")
     public void syncFromFinnhub() {
         log.info("📈 [Scheduler] Finnhub IPO Calendar sync triggered");
         try {
@@ -110,6 +114,19 @@ public class GmpScheduler {
             log.info("📈 [Scheduler] Finnhub sync complete — {} IPOs created/updated", count);
         } catch (Exception e) {
             log.error("❌ [Scheduler] Finnhub sync failed: {}", e.getMessage(), e);
+        }
+    }
+
+    // ─── 6. Startup sync — runs once after app is fully ready ───────
+    // Ensures fresh Finnhub data on deploy / Render cold-start
+    @EventListener(ApplicationReadyEvent.class)
+    public void onStartup() {
+        log.info("🚀 [Startup] Running initial Finnhub sync...");
+        try {
+            int count = finnhubSyncService.sync();
+            log.info("🚀 [Startup] Finnhub startup sync complete — {} IPOs created/updated", count);
+        } catch (Exception e) {
+            log.error("❌ [Startup] Finnhub startup sync failed: {}", e.getMessage(), e);
         }
     }
 }

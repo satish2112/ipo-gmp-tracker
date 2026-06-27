@@ -8,7 +8,7 @@
 let allIpos      = [];
 let activeFilter = 'ALL';  // status filter
 let activeType   = null;   // 'EQ' | 'SME' | null
-let sortCol      = 'gmp';
+let sortCol      = null;   // null = keep server order (Open→Upcoming→Closed→Listed by date)
 let sortDir      = 'desc';
 let selectedId   = null;
 let stompClient  = null;
@@ -249,45 +249,78 @@ function buildRow(ipo) {
 
 // ── Mobile card ──
 function buildCard(ipo) {
-  const g    = ipo.gmp ?? 0;
-  const gCls = g >= 0 ? 'g' : 'r';
-  const sign = g >= 0 ? '+' : '-';
-  const pct  = ipo.gmpPercentage != null ? fmt(ipo.gmpPercentage, 2) + '%' : '—';
-  const est  = ipo.expectedListingPrice != null ? '₹' + fmtN(ipo.expectedListingPrice, 0) : '—';
-  const pcls = g >= 0 ? 'card-pos' : 'card-neg';
+  const g     = ipo.gmp ?? 0;
+  const gCls  = g >= 0 ? 'g' : 'r';
+  const sign  = g >= 0 ? '+' : '-';
+  const pct   = ipo.gmpPercentage != null ? (g >= 0 ? '+' : '') + fmt(ipo.gmpPercentage, 1) + '%' : '—';
+  const est   = ipo.expectedListingPrice != null ? '₹' + fmtN(ipo.expectedListingPrice, 0) : '—';
 
-  const arrow = g >= 0
-    ? '<i class="bi bi-arrow-up-short" style="font-size:16px"></i>'
-    : '<i class="bi bi-arrow-down-short" style="font-size:16px"></i>';
+  // Status-based card top border
+  const sMap  = { OPEN:'card-open', UPCOMING:'card-upcoming', CLOSED:'card-closed', LISTED:'card-listed' };
+  const scls  = sMap[ipo.status] || 'card-upcoming';
 
-  return `<div class="ipo-card ${pcls}" data-id="${ipo.id}">
-    <div class="card-top">
-      <div>
-        <div class="card-name">${esc(ipo.name)}</div>
-        <div class="card-type">${ipo.type || 'EQ'} · Mainboard</div>
+  // Trend arrow
+  const arrow = ipo.gmpTrend === 'UP'
+    ? '<i class="bi bi-arrow-up-short" style="font-size:15px"></i>'
+    : ipo.gmpTrend === 'DOWN'
+    ? '<i class="bi bi-arrow-down-short" style="font-size:15px"></i>'
+    : '';
+
+  // Type badge
+  const typeTxt  = (ipo.type || 'EQ').toUpperCase();
+  const typeCls  = typeTxt === 'SME' ? 'sme' : '';
+  const typeBadge = `<span class="card-type-badge ${typeCls}">${typeTxt}</span>`;
+
+  // Allotment / close date label
+  let dateLabel = '';
+  if (ipo.allotmentDate) {
+    const d   = new Date(ipo.allotmentDate);
+    const tag = (ipo.status === 'CLOSED' || ipo.status === 'LISTED') ? 'Allot' : 'Allot';
+    dateLabel = `${tag}: <strong>${d.toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</strong>`;
+  }
+
+  // Daily change chip
+  let chgHtml = '';
+  if (ipo.dailyGmpChange != null && Math.abs(ipo.dailyGmpChange) > 0.01) {
+    const s2  = ipo.dailyGmpChange > 0 ? '+' : '';
+    const c2  = ipo.dailyGmpChange > 0 ? 'g' : 'r';
+    chgHtml = `<span class="${c2}" style="font-size:10px">${s2}₹${fmtN(Math.abs(ipo.dailyGmpChange),2)} today</span>`;
+  }
+
+  return `<div class="ipo-card ${scls}" data-id="${ipo.id}">
+    <div class="card-body">
+      <div class="card-top">
+        <div class="card-name-wrap">
+          <div class="card-name">${esc(ipo.name)}</div>
+          <div class="card-badges">
+            ${typeBadge}
+            ${bdg(ipo.status)}
+            ${chgHtml}
+          </div>
+        </div>
+        <div class="card-gmp">
+          <div class="card-gmp-val ${gCls}">${arrow}${sign}₹${fmtN(Math.abs(g), 2)}</div>
+          <div class="card-gmp-pct ${gCls}">${pct}</div>
+        </div>
       </div>
-      <div class="card-gmp">
-        <div class="card-gmp-val ${gCls}">${arrow}${sign}₹${fmtN(Math.abs(g), 2)}</div>
-        <div class="card-gmp-pct ${gCls}">${pct}</div>
-      </div>
-    </div>
-    <div class="card-row">
-      <div class="card-kv">
-        <div class="card-kv-l">Price Band</div>
-        <div class="card-kv-v">₹${fmtN(ipo.issuePrice, 0)}</div>
-      </div>
-      <div class="card-kv">
-        <div class="card-kv-l">Est. Listing</div>
-        <div class="card-kv-v fw">${est}</div>
-      </div>
-      <div class="card-kv">
-        <div class="card-kv-l">Subscription</div>
-        <div class="card-kv-v">${ipo.subscriptionTimes != null ? fmtN(ipo.subscriptionTimes, 2) + 'x' : '—'}</div>
+      <div class="card-stats">
+        <div class="card-stat-item">
+          <span class="card-stat-l">Price</span>
+          <span class="card-stat-v">₹${fmtN(ipo.issuePrice, 0)}</span>
+        </div>
+        <div class="card-stat-item">
+          <span class="card-stat-l">Est. List</span>
+          <span class="card-stat-v fw ${gCls}">${est}</span>
+        </div>
+        <div class="card-stat-item">
+          <span class="card-stat-l">Sub</span>
+          <span class="card-stat-v">${ipo.subscriptionTimes != null ? fmtN(ipo.subscriptionTimes, 1) + 'x' : '—'}</span>
+        </div>
       </div>
     </div>
     <div class="card-foot">
-      ${bdg(ipo.status)}
-      <span style="font-size:11px;color:var(--tx3)">Tap for details</span>
+      <span class="card-foot-time">${dateLabel || 'Tap for details'}</span>
+      <i class="bi bi-chevron-right" style="font-size:11px;color:var(--tx3)"></i>
     </div>
   </div>`;
 }
@@ -395,6 +428,7 @@ function initSort() {
         sortCol = col;
         sortDir = 'desc';
       }
+      // Clicking the column again with same dir → toggle; clicking a new col resets to server order would be jarring so keep
       // Update sort icons
       document.querySelectorAll('.si').forEach(i => {
         i.className = 'bi bi-chevron-expand si'; i.style.opacity = '.4';
@@ -420,15 +454,17 @@ function filtered() {
   // Type filter
   if (activeType) { data = data.filter(i => (i.type || 'EQ') === activeType); }
 
-  // Sort
-  data.sort((a, b) => {
-    let av = a[sortCol], bv = b[sortCol];
-    if (typeof av === 'string') av = av.toLowerCase();
-    if (typeof bv === 'string') bv = bv.toLowerCase();
-    if (av == null) return 1;
-    if (bv == null) return -1;
-    return sortDir === 'asc' ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
-  });
+  // Sort — null means keep server order (Open→Upcoming→Closed→Listed by date)
+  if (sortCol) {
+    data.sort((a, b) => {
+      let av = a[sortCol], bv = b[sortCol];
+      if (typeof av === 'string') av = av.toLowerCase();
+      if (typeof bv === 'string') bv = bv.toLowerCase();
+      if (av == null) return 1;
+      if (bv == null) return -1;
+      return sortDir === 'asc' ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
+    });
+  }
 
   return data;
 }

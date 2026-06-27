@@ -90,6 +90,10 @@ public class Ipo {
     @Field("subscription_times")
     private Double subscriptionTimes;
 
+    /** IPO type — "EQ" (Mainboard) or "SME" */
+    @Field("type")
+    private String type;
+
     @Field("qib_times")
     private Double qibTimes;
 

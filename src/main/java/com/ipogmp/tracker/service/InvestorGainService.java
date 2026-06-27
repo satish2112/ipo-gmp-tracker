@@ -43,15 +43,21 @@ public class InvestorGainService {
                 if (cols.size() > 5) {
                     try {
                         String ipoName = cols.get(0).text();
+
+                        // col 1 may contain IPO type (EQ / SME / MainBoard)
+                        String rawType = cols.size() > 1 ? cols.get(1).text().trim().toUpperCase() : "";
+                        String type = rawType.contains("SME") ? "SME" : "EQ";
+
                         String gmp   = cols.get(2).text();
                         String price = cols.get(3).text();
 
                         // col 7 = allotment date, col 11 = subscription (may vary by page version)
-                        String allotmentDate    = cols.size() > 7  ? cols.get(7).text()  : null;
+                        String allotmentDate     = cols.size() > 7  ? cols.get(7).text()  : null;
                         String subscriptionTimes = cols.size() > 11 ? cols.get(11).text() : null;
 
                         InvestorGainIpo ipo = InvestorGainIpo.builder()
                                 .name(ipoName)
+                                .type(type)
                                 .gmp(gmp)
                                 .price(price)
                                 .allotmentDate(allotmentDate)

@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -31,8 +32,43 @@ public class IpoService {
     // ─── READ (always from MongoDB) ───────────────────────────────────
 
     public List<IpoDTO> getAllIpos() {
-        return ipoRepository.findAllByOrderByGmpDesc()
-            .stream().map(IpoDTO::fromIpo).collect(Collectors.toList());
+        return ipoRepository.findAll()
+            .stream()
+            .sorted(statusDateComparator())
+            .map(IpoDTO::fromIpo)
+            .collect(Collectors.toList());
+    }
+
+    /**
+     * Sort: OPEN → UPCOMING → CLOSED → LISTED → null
+     * Within OPEN/UPCOMING: nearest allotment date first (ascending).
+     * Within CLOSED/LISTED: most recent allotment date first (descending).
+     * Tie-break: GMP descending.
+     */
+    private Comparator<Ipo> statusDateComparator() {
+        return Comparator
+            .comparingInt((Ipo i) -> statusRank(i.getStatus()))
+            .thenComparing((Ipo a, Ipo b) -> {
+                int rank = statusRank(a.getStatus());
+                boolean recent = rank >= 2; // CLOSED / LISTED
+                var da = a.getAllotmentDate();
+                var db = b.getAllotmentDate();
+                if (da == null && db == null) return 0;
+                if (da == null) return 1;
+                if (db == null) return -1;
+                return recent ? db.compareTo(da) : da.compareTo(db);
+            })
+            .thenComparing(Comparator.comparingDouble((Ipo i) -> i.getGmp() != null ? i.getGmp() : 0.0).reversed());
+    }
+
+    private int statusRank(Ipo.IpoStatus s) {
+        if (s == null) return 4;
+        return switch (s) {
+            case OPEN     -> 0;
+            case UPCOMING -> 1;
+            case CLOSED   -> 2;
+            case LISTED   -> 3;
+        };
     }
 
     public IpoDTO getIpoById(String id) {
